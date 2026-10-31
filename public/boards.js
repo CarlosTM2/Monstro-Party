@@ -9,7 +9,7 @@
   /* ---------------- Thèmes (régions de Monstralia) ---------------- */
   const THEMES = {
     jurassic: {
-      id: 'jurassic', name: 'Vallée Jurassique', emoji: '🦖', seed: 7, wobble: 0.08, waves: 3, shape: 2,
+      id: 'jurassic', name: 'Vallée Jurassique', emoji: '🦖', warp: { icon: '🦅', name: 'Ptéro-taxi', ride: 'ptero', text: 'Un ptérodactyle attrape {p} et l’emporte dans les airs !' }, seed: 7, wobble: 0.08, waves: 3, shape: 2,
       desc: 'Volcans, fougères géantes et dinosaures affamés.',
       bg: ['#2f5d34', '#7a9b3f'], path: '#d9c38a', floor: '#8b6b3e',
       decor: ['🌴', '🌿', '🦴', '🥚', '🌋', '🦕', '🍃', '🪨'],
@@ -18,7 +18,7 @@
       countGame: { target: '🦖', others: ['🦕', '🌴', '🥚', '🦴'] },
     },
     pirate: {
-      id: 'pirate', name: 'Île aux Pirates', emoji: '🏴‍☠️', seed: 21, wobble: 0.12, waves: 4, shape: 2.3,
+      id: 'pirate', name: 'Île aux Pirates', emoji: '🏴‍☠️', warp: { icon: '⛵', name: 'Barque', ride: 'boat', text: '{p} monte dans une barque et rame vers l’autre rive !' }, seed: 21, wobble: 0.12, waves: 4, shape: 2.3,
       desc: 'Trésors, canons et ponts de corde au-dessus des requins.',
       bg: ['#0e5a8a', '#1fa2c7'], path: '#f2d49b', floor: '#7c4a1e',
       decor: ['🌊', '🦈', '⚓', '🏝️', '🐚', '🦜', '⛵', '🐠'],
@@ -27,7 +27,7 @@
       countGame: { target: '🦜', others: ['💰', '🏴‍☠️', '⚓', '🐚'] },
     },
     heroes: {
-      id: 'heroes', name: 'Méga City', emoji: '🦸', seed: 42, wobble: 0, waves: 3, shape: 6,
+      id: 'heroes', name: 'Méga City', emoji: '🦸', warp: { icon: '🚁', name: 'Hélicoptère', ride: 'heli', text: 'Un hélicoptère emporte {p} au-dessus des toits !' }, seed: 42, wobble: 0, waves: 3, shape: 6,
       desc: 'Une ville de super-héros : gratte-ciel, éclairs et super-vitesse.',
       bg: ['#24135f', '#6d28d9'], path: '#fde68a', floor: '#334155',
       decor: ['🏙️', '🏢', '⚡', '🚁', '🌃', '💥', '🛸', '🚓'],
@@ -36,7 +36,7 @@
       countGame: { target: '🦸', others: ['⚡', '🏙️', '💥', '🦹'] },
     },
     mine: {
-      id: 'mine', name: 'Mine Profonde', emoji: '⛏️', seed: 99, wobble: 0.1, waves: 5, shape: 2.6,
+      id: 'mine', name: 'Mine Profonde', emoji: '⛏️', warp: { icon: '🛤️', name: 'Wagon', ride: 'cart', text: '{p} saute dans un wagon et file dans les galeries !' }, seed: 99, wobble: 0.1, waves: 5, shape: 2.6,
       desc: 'Galeries sombres, wagons, cristaux… et passages secrets.',
       bg: ['#1c1917', '#57534e'], path: '#a8a29e', floor: '#44403c',
       decor: ['⛏️', '💎', '🪨', '🔦', '🕯️', '🪵', '💰', '🦇'],
@@ -44,28 +44,76 @@
       special: { icon: '🪨', name: 'Éboulement', desc: 'La Reine Taupe secoue la galerie : tu perds 8 pépites.' },
       countGame: { target: '💎', others: ['🪨', '⛏️', '🔦', '🦇'] },
     },
+    recif: {
+      id: 'recif', name: 'Récif aux 8 Îlots', emoji: '🐠', warp: { icon: '⛵', name: 'Bateau-navette', ride: 'boat', text: '{p} monte dans le bateau-navette et file vers un autre îlot !' }, seed: 63, wobble: 0.06, waves: 3, shape: 2,
+      desc: 'Huit petits îlots reliés par des ponts de corde au-dessus d’un lagon plein de coraux.',
+      bg: ['#0891b2', '#5eead4'], path: '#f5deb3', floor: '#c2a878',
+      decor: ['🌴', '🐚', '🦜', '🪸', '🌿', '🪨'],
+      coin: { name: 'coquillages', one: 'coquillage', icon: '🐚' }, star: { name: 'Corail d’or', a: 'un Corail d’or', icon: '🪸', rule: 'Le Corail d’or coûte 20 coquillages.' },
+      special: { icon: '🌊', name: 'Raz-de-marée', desc: 'Une vague géante t’emporte sur un autre îlot au hasard.' },
+      countGame: { target: '🐠', others: ['🐙', '🦀', '🐚', '🪸'] },
+    },
   };
 
   /* ---------------- Formes : petit, moyen, grand, avec ou sans étage ---------------- */
   // areas : boucles (centre, rayons, nombre de cases, étage) ; branches : raccourcis ; links : passages d'une boucle à l'autre.
   const LAYOUTS = {
     small: { W: 1000, H: 700, areas: [{ cx: 500, cy: 350, rx: 410, ry: 260, N: 26 }], branches: [{ a: 0, from: 3, to: 11, n: 4, bend: 0.5 }], links: [],
-      force: { shop: 1, nest: 1, chance: 1, chaos: 1, casino: 1, trade: 1 }, tunnels: 2, stars: 1 },
+      force: { shop: 1, nest: 1, chance: 1, chaos: 1, casino: 1, trade: 1, boss: 1, shift: 1 }, tunnels: 2, stars: 1 },
     medium: { W: 1200, H: 840, areas: [{ cx: 600, cy: 420, rx: 530, ry: 345, N: 40 }], branches: [{ a: 0, from: 3, to: 13, n: 5, bend: 0.45 }, { a: 0, from: 23, to: 33, n: 5, bend: 0.45 }], links: [],
-      force: { shop: 2, nest: 1, chance: 2, chaos: 1, casino: 2, trade: 2 }, tunnels: 3, stars: 1 },
+      force: { shop: 2, nest: 1, chance: 2, chaos: 1, casino: 2, trade: 2, boss: 2, shift: 2 }, tunnels: 3, stars: 1 },
     mediumF: { W: 1200, H: 840, areas: [{ cx: 600, cy: 420, rx: 540, ry: 355, N: 36 }, { cx: 600, cy: 410, rx: 260, ry: 155, N: 16, level: 1 }], branches: [],
       links: [{ from: [0, 5], to: [1, 2], n: 2 }, { from: [1, 10], to: [0, 22], n: 2 }],
-      force: { shop: 2, nest: 1, chance: 2, chaos: 1, casino: 2, trade: 2 }, tunnels: 3, stars: 1 },
+      force: { shop: 2, nest: 1, chance: 2, chaos: 1, casino: 2, trade: 2, boss: 2, shift: 2 }, tunnels: 3, stars: 1 },
     large: { W: 1600, H: 1120, areas: [{ cx: 380, cy: 560, rx: 300, ry: 460, N: 32 }, { cx: 1220, cy: 560, rx: 300, ry: 460, N: 32 }],
       branches: [{ a: 0, from: 15, to: 27, n: 5, bend: 0.5 }, { a: 1, from: 2, to: 13, n: 5, bend: 0.5 }],
       links: [{ from: [0, 6], to: [1, 26], n: 3 }, { from: [1, 22], to: [0, 10], n: 3 }],
-      force: { shop: 3, nest: 2, chance: 2, chaos: 2, casino: 3, trade: 2 }, tunnels: 4, stars: 2 },
+      force: { shop: 3, nest: 2, chance: 2, chaos: 2, casino: 3, trade: 2, boss: 2, shift: 2 }, tunnels: 4, stars: 2 },
     largeF: { W: 1600, H: 1120, areas: [{ cx: 380, cy: 690, rx: 300, ry: 380, N: 30 }, { cx: 1220, cy: 690, rx: 300, ry: 380, N: 30 }, { cx: 800, cy: 150, rx: 230, ry: 92, N: 14, level: 1 }],
       branches: [{ a: 0, from: 14, to: 25, n: 5, bend: 0.5 }, { a: 1, from: 5, to: 15, n: 5, bend: 0.5 }],
       links: [{ from: [0, 7], to: [1, 23], n: 3 }, { from: [1, 21], to: [0, 9], n: 3 }, { from: [0, 3], to: [2, 11], n: 1 }, { from: [2, 3], to: [1, 27], n: 1 }],
-      force: { shop: 3, nest: 2, chance: 2, chaos: 2, casino: 3, trade: 2 }, tunnels: 4, stars: 2 },
+      force: { shop: 3, nest: 2, chance: 2, chaos: 2, casino: 3, trade: 2, boss: 2, shift: 2 }, tunnels: 4, stars: 2 },
   };
 
+  // Tracés propres à chaque région (taille moyenne). Les index '@deg' désignent la case à cet angle (0 = droite, 90 = bas).
+  const F2 = { shop: 2, nest: 1, chance: 2, chaos: 1, casino: 2, trade: 2, boss: 2, shift: 2 };
+  const THEME_LAYOUTS = {
+    jurassic: {
+      medium: { W: 1200, H: 840, areas: [{ cx: 320, cy: 420, rx: 245, ry: 330, N: 22 }, { cx: 880, cy: 420, rx: 245, ry: 330, N: 22 }], branches: [{ a: 0, from: '@-150', to: '@30', n: 4, bend: 0.15 }, { a: 1, from: '@-30', to: '@150', n: 4, bend: 0.15 }],
+        links: [{ from: [0, '@-40'], to: [1, '@-140'], n: 2, bridge: 22 }, { from: [1, '@140'], to: [0, '@40'], n: 2, bridge: 22 }, { from: [0, '@-80'], to: [1, '@100'], n: 10, bridge: 80 }], force: F2, tunnels: 2, stars: 1,
+        river: [[600, -20], [575, 120], [630, 260], [585, 420], [625, 580], [590, 720], [610, 860]] },
+      mediumF: { W: 1200, H: 840, areas: [{ cx: 320, cy: 420, rx: 245, ry: 330, N: 22 }, { cx: 880, cy: 420, rx: 250, ry: 335, N: 22 }, { cx: 880, cy: 420, rx: 105, ry: 150, N: 10, level: 1 }], branches: [],
+        links: [{ from: [0, '@-40'], to: [1, '@-140'], n: 2 }, { from: [1, '@140'], to: [0, '@40'], n: 2 }, { from: [1, '@-60'], to: [2, '@-60'], n: 1 }, { from: [2, '@60'], to: [1, '@60'], n: 1 }], force: F2, tunnels: 2, stars: 1 },
+    },
+    pirate: {
+      medium: { W: 1400, H: 980, areas: [{ cx: 700, cy: 490, rx: 300, ry: 215, N: 22 }, { cx: 861, cy: 132, rx: 92, ry: 50, N: 6, ship: true, zOff: 22, shape: 2 }, { cx: 1245, cy: 485, rx: 92, ry: 50, N: 6, ship: true, zOff: 22, shape: 2 }, { cx: 876, cy: 845, rx: 92, ry: 50, N: 6, ship: true, zOff: 22, shape: 2 }, { cx: 264, cy: 715, rx: 92, ry: 50, N: 6, ship: true, zOff: 22, shape: 2 }, { cx: 255, cy: 274, rx: 92, ry: 50, N: 6, ship: true, zOff: 22, shape: 2 }], branches: [{ a: 0, from: '@-90', to: '@90', n: 4, bend: 0 }],
+        links: [{ from: [1, '@23'], to: [2, '@-117'], n: 2, bridge: 14 }, { from: [2, '@116'], to: [3, '@-24'], n: 2, bridge: 14 }, { from: [3, '@-188'], to: [4, '@32'], n: 2, bridge: 14 }, { from: [4, '@-111'], to: [5, '@109'], n: 2, bridge: 14 }, { from: [5, '@-33'], to: [1, '@187'], n: 2, bridge: 14 }, { from: [0, '@-66'], to: [1, '@114'], n: 2 }, { from: [0, '@64'], to: [3, '@-116'], n: 2 }, { from: [2, '@194'], to: [0, '@14'], n: 2 }, { from: [5, '@41'], to: [0, '@-139'], n: 2 }], force: F2, tunnels: 2, stars: 1, islandOnly: [0], ships: true },
+    },
+    heroes: {
+      medium: { W: 1200, H: 840, areas: [{ cx: 600, cy: 420, rx: 525, ry: 345, N: 36 }, { cx: 600, cy: 420, rx: 245, ry: 150, N: 16 }], branches: [],
+        links: [{ from: [0, '@0'], to: [1, '@0'], n: 3 }, { from: [1, '@180'], to: [0, '@180'], n: 3 }, { from: [0, '@-55'], to: [0, '@125'], n: 11, bridge: 80 }], force: F2, tunnels: 2, stars: 1 },
+      mediumF: { W: 1200, H: 840, areas: [{ cx: 600, cy: 420, rx: 535, ry: 355, N: 34 }, { cx: 330, cy: 300, rx: 112, ry: 82, N: 8, level: 1, shape: 6 }, { cx: 870, cy: 300, rx: 112, ry: 82, N: 8, level: 1, shape: 6 }, { cx: 600, cy: 555, rx: 112, ry: 72, N: 8, level: 1, shape: 6 }], branches: [],
+        links: [{ from: [0, '@-140'], to: [1, '@-140'], n: 1 }, { from: [1, '@0'], to: [2, '@180'], n: 2, bridge: 18 }, { from: [2, '@100'], to: [3, '@-20'], n: 2, bridge: 18 }, { from: [3, '@200'], to: [1, '@80'], n: 2, bridge: 18 }, { from: [2, '@-40'], to: [0, '@-40'], n: 1 }, { from: [3, '@90'], to: [0, '@90'], n: 1 }], force: F2, tunnels: 3, stars: 1 },
+    },
+    mine: {
+      medium: { W: 1200, H: 840, areas: [{ cx: 240, cy: 260, rx: 175, ry: 185, N: 14 }, { cx: 640, cy: 580, rx: 200, ry: 200, N: 16 }, { cx: 1000, cy: 260, rx: 150, ry: 160, N: 11 }], branches: [],
+        links: [{ from: [0, '@30'], to: [1, '@-150'], n: 2 }, { from: [1, '@180'], to: [0, '@90'], n: 2 }, { from: [1, '@-20'], to: [2, '@120'], n: 2 }, { from: [2, '@180'], to: [1, '@-100'], n: 3 }, { from: [0, '@-10'], to: [2, '@200'], n: 6, bridge: 70 }], force: F2, tunnels: 3, stars: 1 },
+      mediumF: { W: 1200, H: 840, areas: [{ cx: 240, cy: 260, rx: 175, ry: 185, N: 14 }, { cx: 640, cy: 580, rx: 200, ry: 200, N: 16 }, { cx: 1000, cy: 260, rx: 110, ry: 120, N: 9, level: 1 }], branches: [],
+        links: [{ from: [0, '@30'], to: [1, '@-150'], n: 2 }, { from: [1, '@180'], to: [0, '@90'], n: 2 }, { from: [1, '@-20'], to: [2, '@120'], n: 1 }, { from: [2, '@180'], to: [1, '@-100'], n: 1 }], force: F2, tunnels: 3, stars: 1 },
+    },
+  };
+  // Récif : 8 îlots en cercle, reliés par des ponts ; deux grands ponts se croisent au-dessus du lagon (l'un passe sous l'autre)
+  function recifLayout(size) {
+    const S = { small: [1200, 840, 6, 2, 0.85], medium: [1400, 980, 7, 2, 1], large: [1700, 1190, 8, 3, 1.18] }[size] || [1400, 980, 7, 2, 1];
+    const W = S[0], H = S[1], N = S[2], nl = S[3], k = S[4];
+    const areas = [], links = [];
+    for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2 - Math.PI / 2; areas.push({ cx: Math.round(W / 2 + Math.cos(a) * (W / 2 - 150 * k)), cy: Math.round(H / 2 + Math.sin(a) * (H / 2 - 125 * k)), rx: Math.round(88 * k), ry: Math.round(74 * k), N: N }); }
+    const deg = (i, j) => Math.round(Math.atan2(areas[j].cy - areas[i].cy, areas[j].cx - areas[i].cx) * 180 / Math.PI);
+    for (let i = 0; i < 8; i++) { const j = (i + 1) % 8; links.push({ from: [i, '@' + (deg(i, j) - 25)], to: [j, '@' + (deg(j, i) + 25)], n: nl, sand: true }); } // bancs de sable (sous l'eau à marée haute)
+    const long = (i, j, h) => { const L = Math.hypot(areas[j].cx - areas[i].cx, areas[j].cy - areas[i].cy); return { from: [i, '@' + deg(i, j)], to: [j, '@' + deg(j, i)], n: Math.max(5, Math.round(L / 78)), bridge: h }; };
+    links.push(long(0, 4, 95), long(6, 2, 14));
+    return { W: W, H: H, areas: areas, branches: [], links: links, force: size === 'small' ? { shop: 1, nest: 1, chance: 1, chaos: 1, casino: 1, trade: 1, boss: 1, shift: 1 } : { shop: 2, nest: 1, chance: 2, chaos: 1, casino: 2, trade: 2, boss: 2, shift: 2 }, tunnels: 4, stars: size === 'large' ? 2 : 1, islands: true };
+  }
   function layoutKey(size, floors) {
     if (size === 'small') return 'small';
     return size + (floors ? 'F' : '');
@@ -75,7 +123,7 @@
   function makeBoard(themeId, size, floors) {
     const key = themeId + ':' + layoutKey(size, floors);
     if (cache[key]) return cache[key];
-    const T = THEMES[themeId], L = LAYOUTS[layoutKey(size, floors)];
+    const T = THEMES[themeId], L = themeId === 'recif' ? recifLayout(size) : (THEME_LAYOUTS[themeId] && THEME_LAYOUTS[themeId][layoutKey(size, floors)]) || LAYOUTS[layoutKey(size, floors)];
     const R = rng(T.seed * 31 + key.length * 7 + (floors ? 5 : 0) + (size === 'large' ? 3 : size === 'medium' ? 2 : 1));
     const nodes = [];
     const areaIds = [];
@@ -83,16 +131,16 @@
       const ids = [];
       for (let i = 0; i < A.N; i++) {
         const a = (i / A.N) * Math.PI * 2 - Math.PI / 2;
-        const c = Math.cos(a), s = Math.sin(a), p = A.level ? 2 : T.shape;
+        const c = Math.cos(a), s = Math.sin(a), p = A.shape || (A.level ? 2 : T.shape);
         const k = Math.pow(Math.pow(Math.abs(c), p) + Math.pow(Math.abs(s), p), -1 / p);
-        const w = 1 + (A.level ? 0 : T.wobble) * Math.sin(a * T.waves + T.seed + ai);
-        nodes.push({ id: nodes.length, x: Math.round(A.cx + A.rx * c * k * w), y: Math.round(A.cy + A.ry * s * k * w), t: 'blue', next: [], level: A.level || 0, area: ai, z: (A.level || 0) * 60 });
+        const w = 1 + (A.level || A.ship ? 0 : T.wobble) * Math.sin(a * T.waves + T.seed + ai);
+        nodes.push({ id: nodes.length, x: Math.round(A.cx + A.rx * c * k * w), y: Math.round(A.cy + A.ry * s * k * w), t: 'blue', next: [], level: A.level || 0, area: ai, z: (A.level || 0) * 60 + (A.zOff || 0) });
         ids.push(nodes.length - 1);
       }
       ids.forEach(function (id, i) { nodes[id].next.push(ids[(i + 1) % ids.length]); });
       areaIds.push(ids);
     });
-    function path(A, B, n, bend, level) {
+    function path(A, B, n, bend, level, bridge, sand) {
       const mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2;
       const cx = L.areas[A.area] ? L.areas[A.area].cx : mx, cy = L.areas[A.area] ? L.areas[A.area].cy : my;
       const px = mx + (cx - mx) * (bend || 0), py = my + (cy - my) * (bend || 0);
@@ -102,8 +150,10 @@
         const x = (1 - t) * (1 - t) * A.x + 2 * (1 - t) * t * px + t * t * B.x;
         const y = (1 - t) * (1 - t) * A.y + 2 * (1 - t) * t * py + t * t * B.y;
         const lv = level != null ? level : (t < 0.5 ? A.level : B.level);
-        const nd = { id: nodes.length, x: Math.round(x), y: Math.round(y), t: 'blue', next: [], level: lv, area: A.area, branch: true, z: Math.round(((A.level || 0) * (1 - t) + (B.level || 0) * t) * 60) };
+        const nd = { id: nodes.length, x: Math.round(x), y: Math.round(y), t: 'blue', next: [], level: lv, area: A.area, branch: true, z: Math.round((A.z || 0) * (1 - t) + (B.z || 0) * t) };
         if (A.level !== B.level) nd.stairs = true;
+        if (bridge) { nd.z += Math.round(Math.sin(t * Math.PI) * bridge); nd.bridge = true; }
+        if (sand) nd.sand = true;
         nodes.push(nd);
         prev.next.push(nd.id);
         prev = nd;
@@ -111,8 +161,10 @@
       prev.next.push(B.id);
       A.fork = true; B.join = true;
     }
-    L.branches.forEach(function (b) { path(nodes[areaIds[b.a][b.from]], nodes[areaIds[b.a][b.to]], b.n, b.bend, nodes[areaIds[b.a][b.from]].level); });
-    L.links.forEach(function (l) { path(nodes[areaIds[l.from[0]][l.from[1]]], nodes[areaIds[l.to[0]][l.to[1]]], l.n, 0); });
+    const ix = function (a, v) { const ids = areaIds[a]; if (typeof v === 'string' && v[0] === '@') { const ang = parseFloat(v.slice(1)) * Math.PI / 180; return ids[((Math.round((ang + Math.PI / 2) / (Math.PI * 2) * ids.length) % ids.length) + ids.length) % ids.length]; } return ids[v]; };
+    L.branches.forEach(function (b) { path(nodes[ix(b.a, b.from)], nodes[ix(b.a, b.to)], b.n, b.bend, nodes[ix(b.a, b.from)].level, b.bridge); });
+    L.links.forEach(function (l) { path(nodes[ix(l.from[0], l.from[1])], nodes[ix(l.to[0], l.to[1])], l.n, l.bend || 0, undefined, l.bridge, l.sand); });
+    (L.bridges || []).forEach(function (b) { path(nodes[ix(b.a, b.from)], nodes[ix(b.a, b.to)], b.n, 0, undefined, b.h); });
     // Embranchement : la sortie « boucle » doit rester la première option.
     // Types de cases
     const W = { blue: 47, red: 17, event: 13, item: 9, special: 9 };
@@ -138,8 +190,8 @@
       return best;
     };
     Object.keys(L.force).forEach(function (type) { for (let i = 0; i < L.force[type]; i++) placeFar(type); });
-    if (themeId === 'mine') {
-      for (let i = 0; i < L.tunnels; i++) {
+    {
+      for (let i = 0; i < (themeId === 'mine' ? L.tunnels : Math.min(2, L.tunnels)); i++) {
         const a = placeFar('tunnel'), b = placeFar('tunnel');
         if (a && b) { a.pair = b.id; b.pair = a.id; } else { if (a) a.t = 'blue'; if (b) b.t = 'blue'; }
       }
@@ -156,12 +208,33 @@
     }
     // Plateformes d'étage
     const floorsList = L.areas.filter(function (A) { return A.level; }).map(function (A) { return { cx: A.cx, cy: A.cy, rx: A.rx + 46, ry: A.ry + 46 }; });
+    // Les cases d'escalier (à mi-hauteur) doivent être hors de la falaise, sinon elles s'enfoncent dans le mur
+    nodes.forEach(function (n) {
+      if (!(n.z > 0 && n.z < 60)) return;
+      floorsList.forEach(function (pf) {
+        const dx = n.x - pf.cx, dy = n.y - pf.cy, q = Math.pow(dx / pf.rx, 2) + Math.pow(dy / pf.ry, 2);
+        const want = n.z >= 40 ? 1.3 : 1.6;
+        if (q < want) { const k = Math.sqrt(want / Math.max(q, 0.05)); n.x = Math.round(Math.max(36, Math.min(L.W - 36, pf.cx + dx * k))); n.y = Math.round(Math.max(36, Math.min(L.H - 36, pf.cy + dy * k))); }
+      });
+    });
+    // Petits ajustements : cases jamais collées entre elles ni hors du plateau
+    for (let it = 0; it < 8; it++) {
+      nodes.forEach(function (a) { nodes.forEach(function (b) {
+        if (a.id >= b.id || Math.abs((a.z || 0) - (b.z || 0)) >= 30) return;
+        const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
+        if (d >= 48) return;
+        const push = (48 - d) / 2, ux = dx / d, uy = dy / d;
+        const ma = a.branch ? 1 : b.branch ? 0 : 0.5, mb = 1 - ma;
+        a.x -= ux * push * 2 * ma; a.y -= uy * push * 2 * ma; b.x += ux * push * 2 * mb; b.y += uy * push * 2 * mb;
+      }); });
+    }
+    nodes.forEach(function (n) { n.x = Math.round(Math.max(34, Math.min(L.W - 34, n.x))); n.y = Math.round(Math.max(34, Math.min(L.H - 34, n.y))); });
     const B = {
       id: themeId, key: key, size: size, floors: !!floors && size !== 'small', W: L.W, H: L.H,
       name: T.name, emoji: T.emoji, desc: T.desc, bg: T.bg, path: T.path, floorColor: T.floor,
-      special: T.special, countGame: T.countGame, coin: T.coin, star: T.star,
+      special: T.special, warp: T.warp, countGame: T.countGame, coin: T.coin, star: T.star,
       stars: themeId === 'heroes' ? Math.max(2, L.stars) : L.stars,
-      nodes: nodes, decor: decor, platforms: floorsList,
+      nodes: nodes, decor: decor, platforms: L.islands ? [] : floorsList, islands: L.islands ? L.areas.map(function (A) { return { cx: A.cx, cy: A.cy, rx: A.rx, ry: A.ry }; }) : L.islandOnly ? L.islandOnly.map(function (k) { const A = L.areas[k]; return { cx: A.cx, cy: A.cy, rx: A.rx, ry: A.ry }; }) : null, ships: L.areas.filter(function (A) { return A.ship; }).map(function (A) { return { cx: A.cx, cy: A.cy, rx: A.rx, ry: A.ry, z: A.zOff || 0 }; }), river: L.river || null,
     };
     cache[key] = B;
     return B;
@@ -180,6 +253,7 @@
       pirate: { name: 'Capitaine Calamarde', desc: 'une pieuvre pirate à huit sabres' },
       heroes: { name: 'Docteur Chaos', desc: 'un savant fou qui vole l’électricité de la ville' },
       mine: { name: 'La Reine Taupe', desc: 'une taupe géante qui garde les cristaux' },
+      recif: { name: 'Reine Méduse', desc: 'une méduse géante qui règne sur le lagon' },
     },
   };
 
@@ -294,6 +368,11 @@
    ['l_ile', '🏝️', 'L’Île aux Pirates', 'On dit qu’une perle noire dort dans le lagon.'],
    ['l_ville', '🏙️', 'Méga City', 'La ville qui ne dort jamais (sauf pendant les pannes).'],
    ['l_mine', '⛏️', 'La Mine Profonde', 'Plus on descend, plus ça brille.'],
+   ['l_recif', '🏝️', 'Le Récif aux 8 Îlots', 'Huit îlots, des ponts de corde et un lagon turquoise.'],
+   ['b_meduse', '🪼', 'Reine Méduse', 'Elle règne sur le lagon et pique les imprudents.'],
+   ['c_tortue', '🐢', 'Tortue-taxi', 'La plus lente des taxis, mais la plus sûre.'],
+   ['c_crabe', '🦀', 'Crabe ermite', 'Il change de coquille plus souvent que de chemin.'],
+   ['c_dauphin', '🐬', 'Dauphin farceur', 'Il éclabousse tous ceux qui passent sur les ponts.'],
   ].forEach(function (c) { CARDS[c[0]] = { icon: c[1], name: c[2], rarity: 'commune', desc: c[3] }; });
   Object.assign(CARDS, {
     r_bourse: { icon: '👛', name: 'Petite bourse', rarity: 'rare', desc: '+5 pièces.', fx: 'coins5' },
@@ -320,9 +399,12 @@
     jurassique: { icon: '🦖', name: 'Famille Jurassique', cards: ['l_vallee', 'b_magmator', 'm_dinomite', 'm_gromp', 'm_fifi'], bonus: ['+1 pièce sur chaque case bleue', '+2 pièces sur chaque case bleue'] },
     pirate: { icon: '🏴‍☠️', name: 'Famille Pirate', cards: ['l_ile', 'b_calamarde', 'm_krakos', 'm_moustache', 'm_bulle'], bonus: ['−1 pièce sur chaque achat en boutique', '−2 pièces sur chaque achat en boutique'] },
     ville: { icon: '🏙️', name: 'Famille Méga City', cards: ['l_ville', 'b_chaos', 'm_volt', 'm_zazou', 'm_nuage'], bonus: ['+1 pièce à chaque mini-jeu', '+2 pièces à chaque mini-jeu'] },
+    recif: { icon: '🐠', name: 'Famille Récif', cards: ['l_recif', 'b_meduse', 'c_tortue', 'c_crabe', 'c_dauphin'], bonus: ['+2 pièces à chaque transport (tortue, barque, métro…)', '+4 pièces à chaque transport'] },
     mine: { icon: '⛏️', name: 'Famille Mine', cards: ['l_mine', 'b_taupe', 'm_pikrok', 'm_ombrette', 'm_patapouf'], bonus: ['−1 pièce perdue sur les cases rouges', '−2 pièces perdues sur les cases rouges'] },
   };
   Object.keys(FAMILIES).forEach(function (f) { FAMILIES[f].cards.forEach(function (id) { CARDS[id].fam = f; }); });
+  /* Cycle jour / nuit : 6 tours = jour, jour, crépuscule, nuit, nuit, aube */
+  function dayPhase(turn) { return ['jour', 'jour', 'crépuscule', 'nuit', 'nuit', 'aube'][((Math.max(1, turn) - 1) % 6)]; }
   function famLevel(cards, f) { const own = new Set(cards || []); const n = FAMILIES[f].cards.filter(function (id) { return own.has(id); }).length; return n >= 5 ? 2 : n >= 3 ? 1 : 0; }
 
   /* ---------------- Données de jeu ---------------- */
@@ -344,6 +426,8 @@
       echange: { icon: '🔄', name: 'Échangeur', price: 8, desc: 'Échange ta place avec un joueur.' },
       bouclier: { icon: '🛡️', name: 'Bouclier', price: 5, desc: 'Annule ta prochaine perte (pièces ou étoile).' },
       piege: { icon: '🪤', name: 'Piège', price: 5, desc: 'Pose un piège sur ta case : qui s’y arrête te donne 10 pièces.' },
+      sablier: { icon: '⏳', name: 'Sablier', price: 6, desc: 'Tu joueras en premier dès le prochain tour.' },
+      tuyau: { icon: '🟡', name: 'Tuyau d’or', price: 32, desc: 'Te transporte directement sur l’étoile : achète-la et ton tour s’arrête.' },
       boussole: { icon: '🧭', name: 'Boussole d’étoile', price: 15, desc: 'Téléporte-toi juste avant l’étoile.' },
       fantome: { icon: '👻', name: 'Fantôme voleur', price: 40, desc: 'Vole une étoile à un joueur.' },
       mystere: { icon: '🎁', name: 'Boîte mystère', price: 4, desc: 'Se transforme en un objet au hasard.' },
@@ -399,6 +483,6 @@
     },
   };
 
-  const api = { CARDS: CARDS, RARITY: RARITY, FAMILIES: FAMILIES, famLevel: famLevel, THEMES: THEMES, makeBoard: makeBoard, CHARACTERS: CHARACTERS, COLORS: COLORS, WORLD: WORLD, charSVG: charSVG, GAME: GAME };
+  const api = { CARDS: CARDS, RARITY: RARITY, FAMILIES: FAMILIES, famLevel: famLevel, dayPhase: dayPhase, THEMES: THEMES, makeBoard: makeBoard, CHARACTERS: CHARACTERS, COLORS: COLORS, WORLD: WORLD, charSVG: charSVG, GAME: GAME };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.PARTY = api;
 })(this);

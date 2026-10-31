@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { attach } = require('./ws');
-const { THEMES, makeBoard, CHARACTERS, COLORS, WORLD, GAME, CARDS, RARITY, FAMILIES, famLevel } = require('./public/boards.js');
+const { THEMES, makeBoard, CHARACTERS, COLORS, WORLD, GAME, CARDS, RARITY, FAMILIES, famLevel, dayPhase } = require('./public/boards.js');
 const MINIGAMES = require('./minigames.js');
 
 const PORT = process.env.PORT || 3000;
@@ -49,7 +49,7 @@ class Room {
     this.code = code;
     this.players = [];
     this.phase = 'lobby'; // lobby | board | minigame | end
-    this.settings = { theme: 'jurassic', size: 'medium', floors: false, turns: 10, powers: 'off', events: true, bonus: true, gambling: true, boosters: true, bots: 'normal', teams: false };
+    this.settings = { theme: 'jurassic', size: 'medium', floors: false, turns: 10, powers: 'off', events: true, bonus: true, gambling: true, boosters: true, bots: 'normal', teams: false, market: true, mgSolo: false };
     this.reset();
     this.alive = true;
     this.waiters = new Map();
@@ -57,7 +57,7 @@ class Room {
   }
   reset() {
     this.turn = 0; this.current = null; this.stars = []; this.traps = {}; this.prompt = null; this.mg = null;
-    this.log = []; this.lastMg = []; this.mods = {}; this.endInfo = null; this.lastChance = null; this.roundEvent = null; this.blocks = [];
+    this.log = []; this.lastMg = []; this.mods = {}; this.endInfo = null; this.lastChance = null; this.roundEvent = null; this.blocks = []; this.tideHigh = false; this.market = { star: 1, shop: 1, hist: [[1, 1]] };
   }
   get board() { return makeBoard(this.settings.theme, this.settings.size, this.settings.floors); }
   player(id) { return this.players.find((p) => p.id === id); }
@@ -68,7 +68,7 @@ class Room {
   publicState() {
     return {
       code: this.code, phase: this.phase, settings: this.settings, turn: this.turn,
-      current: this.current, stars: this.stars, traps: this.traps, blocks: this.blocks, log: this.log.slice(-6), mods: this.mods, roundEvent: this.roundEvent, lastChance: this.lastChance,
+      current: this.current, stars: this.stars, traps: this.traps, blocks: this.blocks, tide: !!this.tideHigh, market: this.market, log: this.log.slice(-6), mods: this.mods, roundEvent: this.roundEvent, lastChance: this.lastChance,
       prompt: this.prompt ? { pid: this.prompt.pid, kind: this.prompt.kind, data: this.prompt.data, deadline: this.prompt.deadline } : null,
       mg: this.mg ? this.mg.pub : null,
       players: this.players.map((p) => ({
@@ -159,9 +159,10 @@ class Room {
     this.say(GAME.companions[key].icon + ' ' + p.name + ' adopte ' + GAME.companions[key].name + ' : ' + GAME.companions[key].desc);
   }
   starPrice(p, s) {
-    let price = s.price;
+    let price = Math.round(s.price * (this.settings.market ? this.market.star : 1));
     if (p.power === 'astronome') price -= 5;
     if (p.companion === 'hibou') price -= 5;
+    if (this.settings.theme !== 'mine' && dayPhase(this.turn) === 'nuit') price -= 5; // la nuit, l'étoile est moins chère
     if (this.lastChance && this.lastChance.halfStar) price = Math.ceil(price / 2);
     return Math.max(5, price);
   }
@@ -211,10 +212,23 @@ class Room {
         this.blocks = this.blocks.filter((b) => --b.left > 0);
         if (!this.blocks.length && this.settings.events && this.turn >= 2 && Math.random() < (process.env.FORCE_BLOCK ? 1 : 0.3)) await this.regionBlock(); // FORCE_BLOCK : tests
         if (this.settings.events && this.turn >= 2 && Math.random() < 0.35) await this.randomEvent();
+        if (this.settings.market && this.turn >= 2) this.marketTick();
+        if (this.board.id === 'recif') { // marée : haute 2 tours sur 4, les bancs de sable sont alors sous l'eau
+          const high = this.turn % 4 === 3 || this.turn % 4 === 0;
+          if (high !== this.tideHigh) { this.tideHigh = high; this.emit({ t: 'banner', text: high ? '🌊 Marée haute : les bancs de sable disparaissent sous l’eau !' : '🏖️ Marée basse : les bancs de sable réapparaissent' }); this.broadcast(); await sleep(1600); }
+        }
+        if (this.settings.theme !== 'mine' && this.turn > 1 && dayPhase(this.turn) !== dayPhase(this.turn - 1)) {
+          const ph = dayPhase(this.turn);
+          this.emit({ t: 'banner', text: { jour: '☀️ Le jour est levé', 'crépuscule': '🌇 Le soleil se couche…', nuit: '🌙 La nuit tombe : l’étoile coûte 5 de moins !', aube: '🌅 L’aube arrive' }[ph] });
+          await sleep(1500);
+        }
+        if (this.turn > 1 && (this.turn - 1) % (+process.env.ORDER_EVERY || 6) === 0) await this.reorder('Tour ' + this.turn + ' : nouvel ordre de passage !');
         for (const p of this.players) {
           if (!this.alive) return;
           await this.playTurn(p);
         }
+        const fast = this.players.filter((p) => p.firstNext);
+        if (fast.length) { fast.forEach((p) => { p.firstNext = false; }); this.players = fast.concat(this.players.filter((p) => !fast.includes(p))); this.say('⏳ Sablier : ' + fast.map((p) => p.name).join(', ') + ' passe en premier !'); this.emit({ t: 'order', title: '⏳ Sablier : nouvel ordre', order: this.players.map((p) => ({ pid: p.id })) }); this.broadcast(); await sleep(2500); }
         if (!this.alive) return;
         await this.runMinigame();
       }
@@ -227,6 +241,50 @@ class Room {
   }
 
   /** Roulette affichée chez tout le monde (Chance, Dernière ligne droite…). */
+  /** Bourse : le prix des étoiles et de la boutique bouge à chaque tour. */
+  marketTick() {
+    const M = this.market;
+    const step = (v) => Math.max(0.6, Math.min(1.6, +(v * (1 + (Math.random() - 0.5) * 0.3) + (1 - v) * 0.15).toFixed(2)));
+    const before = M.star;
+    M.star = step(M.star); M.shop = step(M.shop);
+    M.hist = M.hist.concat([[M.star, M.shop]]).slice(-10);
+    const B = this.board, pct = Math.round((M.star - before) / before * 100);
+    if (Math.abs(pct) >= 8) this.say((pct > 0 ? '📈' : '📉') + ' Bourse : ' + B.star.a + ' ' + (pct > 0 ? 'grimpe' : 'chute') + ' de ' + Math.abs(pct) + ' % !');
+  }
+  /** Nouvel ordre de passage : chacun lance un dé de 10. */
+  async reorder(title) {
+    const rolls = this.players.map((p) => ({ p, n: rand(1, 10) + Math.random() / 10 }));
+    rolls.sort((a, b) => b.n - a.n);
+    this.players = rolls.map((r) => r.p);
+    this.emit({ t: 'order', title: '🎲 ' + title, order: rolls.map((r) => ({ pid: r.p.id, n: Math.floor(r.n) })) });
+    this.say('🎲 Nouvel ordre de passage : ' + this.players.map((p, i) => (i + 1) + '. ' + p.name).join(', '));
+    this.broadcast();
+    await sleep(3800);
+  }
+  /** Case Boss (façon Bowser) : le boss de la région débarque et fait tourner sa roue. */
+  async bossSpace(p) {
+    const B = this.board, boss = WORLD.bosses[B.id], C = B.coin.name;
+    this.emit({ t: 'fx', kind: 'boss', pid: p.id });
+    this.emit({ t: 'banner', text: '😈 ' + boss.name + ' débarque !' });
+    await sleep(2200);
+    const effects = [
+      { w: 3, label: '−10 ' + C, run: () => this.lose(p, 10, '😈 ' + boss.name + ' prend 10 ' + C + ' à ' + p.name + ' !') },
+      { w: 2, label: '−20 ' + C, run: () => this.lose(p, 20, '😈 ' + boss.name + ' prend 20 ' + C + ' à ' + p.name + ' !') },
+      { w: 2, label: 'Impôt pour tous', run: () => { this.players.forEach((o) => this.lose(o, 5)); this.say('😈 ' + boss.name + ' prend 5 ' + C + ' à tout le monde !'); } },
+      { w: 2, label: 'Retour au départ', run: () => { p.pos = 0; this.emit({ t: 'teleport', pid: p.id, to: 0, fly: true }); this.say('😈 ' + boss.name + ' renvoie ' + p.name + ' au départ !'); } },
+      { w: this.turn >= 3 && p.stars > 0 ? 1 : 0, label: '−1 étoile', run: () => { if (this.canLoseStar(p)) { p.stars--; this.say('😈 ' + boss.name + ' vole une étoile à ' + p.name + ' !'); } } },
+      { w: 2, label: 'Objets confisqués', run: () => { const n = p.items.length; p.items = []; this.say('😈 ' + boss.name + (n ? ' confisque les objets de ' + p.name + ' !' : ' fouille ' + p.name + '… sac vide !')); } },
+      { w: 1, label: 'Bonne humeur : +5', run: () => this.gain(p, 5, '😄 ' + boss.name + ' est de bonne humeur : +5 ' + C + ' pour ' + p.name + ' !') },
+    ].filter((e) => e.w > 0);
+    const tot = effects.reduce((a, e) => a + e.w, 0); let r = Math.random() * tot, i = 0;
+    for (; i < effects.length; i++) { r -= effects[i].w; if (r <= 0) break; }
+    i = Math.min(i, effects.length - 1);
+    await this.roulette('😈 Roue de ' + boss.name, effects.map((e) => e.label), i, effects[i].label);
+    effects[i].run();
+    this.broadcast();
+    await sleep(1400);
+  }
+
   async roulette(title, entries, index, text) {
     this.emit({ t: 'roulette', title, entries, index, text });
     await sleep(4300);
@@ -253,16 +311,22 @@ class Room {
   }
 
   /** Événement de région : un chemin est bloqué pendant 2 tours. */
-  async regionBlock() {
+  async regionBlock(byTile) {
     const B = this.board;
     const forks = B.nodes.filter((n) => n.next.length > 1);
     if (!forks.length) return;
+    if (byTile && this.blocks.length) { // la case Terrain rouvre le chemin bloqué
+      const old = this.blocks[0]; this.blocks = [];
+      this.emit({ t: 'banner', text: old.icon + ' Le passage se rouvre !' }); this.say(old.icon + ' Le chemin bloqué est de nouveau libre.');
+      this.broadcast(); await sleep(2000); return;
+    }
     const n = pick(forks), to = pick(n.next);
     const E = {
       jurassic: { kind: 'dino', icon: '🦕', text: 'Un dino fait la sieste en travers du chemin ! Ce passage est bloqué pendant 2 tours.' },
       pirate: { kind: 'tide', icon: '🌊', text: 'La marée monte : un ponton est sous l’eau pendant 2 tours !' },
       heroes: { kind: 'works', icon: '🚧', text: 'Docteur Chaos a bloqué une rue avec des travaux pendant 2 tours !' },
       mine: { kind: 'rocks', icon: '🪨', text: 'Éboulement ! Une galerie est bouchée pendant 2 tours.' },
+      recif: { kind: 'tide', icon: '🌊', text: 'La marée monte : un pont de corde est sous l’eau pendant 2 tours !' },
     }[B.id];
     this.blocks = [{ from: n.id, to, left: 2, kind: E.kind, icon: E.icon }];
     this.emit({ t: 'banner', text: E.icon + ' ' + E.text });
@@ -378,6 +442,7 @@ class Room {
         const key = p.items.splice(ans.item, 1)[0];
         p.stats.itemsUsed++;
         const r = await this.useItem(p, key);
+        if (r && r.endTurn) { this.broadcast(); await sleep(600); return; }
         if (r && r.dice) forced = r.dice;
         this.broadcast();
         continue;
@@ -385,7 +450,7 @@ class Room {
       // 2) Lancer
       let values;
       if (forced) values = forced;
-      else values = this.rollDie(ans.dice);
+      else values = process.env.FORCE_DICE ? [+process.env.FORCE_DICE] : this.rollDie(ans.dice); // FORCE_DICE : tests
       if (!forced && ans.dice === p.die && p.dieUses) { p.dieUses--; if (p.dieUses <= 0) { const lbl = GAME.dice[p.die].label; p.die = null; p.dieUses = null; this.say('🎲 Le ' + lbl + ' de ' + p.name + ' est usé : c’était son dernier lancer.'); } }
       const bonus = [];
       if (p.companion === 'piou') bonus.push({ icon: '🐣', n: 1 });
@@ -445,6 +510,18 @@ class Room {
       }
       case 'bouclier': p.shield = true; this.say('🛡️ ' + p.name + ' est protégé contre la prochaine perte.'); return null;
       case 'piege': this.traps[p.pos] = p.id; this.say('🪤 ' + p.name + ' pose un piège sur sa case…'); return null;
+      case 'sablier': p.firstNext = true; this.say('⏳ ' + p.name + ' jouera en premier dès le prochain tour !'); return null;
+      case 'tuyau': {
+        const si = rand(0, this.stars.length - 1), st = this.stars[si];
+        this.emit({ t: 'fx', kind: 'pipe', pid: p.id });
+        await sleep(900);
+        p.pos = st.node;
+        this.emit({ t: 'teleport', pid: p.id, to: p.pos, fly: true });
+        await sleep(1300);
+        this.broadcast();
+        await this.starStop(p, si);
+        return { endTurn: true };
+      }
       case 'boussole': {
         const B = this.board; const s = this.stars[0];
         const before = B.nodes.find((n) => n.next.includes(s.node) && !n.branch) || B.nodes.find((n) => n.next.includes(s.node));
@@ -483,12 +560,12 @@ class Room {
       let nextId = node.next[0];
       if (node.next.length > 1) {
         await flush();
-        const open = node.next.filter((id) => !this.blocks.some((b) => b.from === node.id && b.to === id));
+        const open = node.next.filter((id) => !this.blocks.some((b) => b.from === node.id && b.to === id) && !(this.tideHigh && B.nodes[id].sand && !node.sand));
         const ways = open.length ? open : node.next;
         if (ways.length > 1) {
           const opts = ways.map((id) => Object.assign({ value: id }, this.forkLabel(node.id, id)));
           nextId = await this.ask(p.id, 'fork', { text: 'Embranchement ! Où vas-tu ?', options: opts }, () => pick(opts).value, (v) => opts.some((o) => o.value === v));
-        } else { nextId = ways[0]; if (ways.length < node.next.length) { const b = this.blocks.find((x) => x.from === node.id); this.say(b.icon + ' Le chemin est bloqué : ' + p.name + ' passe par l’autre côté.'); } }
+        } else { nextId = ways[0]; if (ways.length < node.next.length) { const b = this.blocks.find((x) => x.from === node.id); this.say((b ? b.icon + ' Le chemin est bloqué' : '🌊 Marée haute : le banc de sable est sous l’eau') + ' : ' + p.name + ' passe par l’autre côté.'); } }
       }
       p.pos = nextId; path.push(nextId); left--; p.stats.steps++;
       // Croiser des joueurs : Pickpocket / Chauvy
@@ -529,7 +606,7 @@ class Room {
 
   async shop(p) {
     const offer = shuffle(ITEM_KEYS.filter((k) => this.settings.gambling || k !== 'ticket')).slice(0, 5);
-    const mult = (this.mods.sale ? 0.5 : 1) * (p.power === 'negociateur' ? 0.7 : 1);
+    const mult = (this.mods.sale ? 0.5 : 1) * (p.power === 'negociateur' ? 0.7 : 1) * (this.settings.market ? this.market.shop : 1);
     const disc = this.fam(p, 'pirate');
     const opts = offer.map((k) => ({ k, price: Math.max(1, Math.round(GAME.items[k].price * mult) - disc) }));
     if (this.settings.boosters) opts.push({ k: 'booster', price: Math.max(1, Math.round(GAME.booster.price * mult) - disc) });
@@ -575,15 +652,19 @@ class Room {
       case 'shop': break; // déjà proposé en passant
       case 'nest': await this.nest(p); break;
       case 'tunnel': {
-        this.say('🕳️ Passage secret ! ' + p.name + ' ressort ailleurs dans la mine.');
-        await sleep(800);
+        const Wp = B.warp;
+        this.say(Wp.icon + ' ' + Wp.text.replace('{p}', p.name));
+        await sleep(600);
         p.pos = node.pair;
-        this.emit({ t: 'teleport', pid: p.id, to: p.pos });
+        this.emit({ t: 'teleport', pid: p.id, to: p.pos, ride: Wp.ride });
+        if (this.fam(p, 'recif')) this.gain(p, 2 * this.fam(p, 'recif'), '🐠 Famille Récif : ' + p.name + ' gagne ' + this.money(2 * this.fam(p, 'recif')) + ' pendant le trajet.');
         this.broadcast();
-        await sleep(900);
+        await sleep(2600);
         break;
       }
       case 'special': await this.special(p, others); break;
+      case 'boss': p.stats.events++; await this.bossSpace(p); break;
+      case 'shift': p.stats.events++; this.emit({ t: 'fx', kind: 'quake', pid: p.id }); await this.regionBlock(true); break;
       case 'event': p.stats.events++; await this.event(p, others); break;
       case 'chance': p.stats.events++; await this.chance(p); break;
       case 'chaos': p.stats.events++; await this.chaos(p); break;
@@ -775,6 +856,13 @@ class Room {
       await sleep(700);
       p.pos = before.id;
       this.emit({ t: 'teleport', pid: p.id, to: p.pos, fly: true });
+    } else if (B.id === 'recif') {
+      const far = B.nodes.filter((n) => n.area !== B.nodes[p.pos].area && !n.bridge && n.t !== 'tunnel');
+      this.say('🌊 Raz-de-marée ! Une vague géante emporte ' + p.name + ' sur un autre îlot !');
+      await sleep(800);
+      p.pos = pick(far).id;
+      this.emit({ t: 'teleport', pid: p.id, to: p.pos, ride: 'wave' });
+      await sleep(2400);
     } else if (B.id === 'mine') {
       this.lose(p, 8, '🪨 Éboulement ! La Reine Taupe secoue la galerie : ' + p.name + ' perd 8 pépites.');
     }
@@ -849,6 +937,7 @@ class Room {
   }
   chooseMode() {
     const N = this.players.length;
+    if (this.settings.mgSolo) return { mode: 'ffa', A: [], B: [] }; // option : toujours chacun pour soi, classement au score
     if (this.settings.teams) {
       const r = Math.random();
       if (r < 0.65) return { mode: 'teams', A: this.players.filter((p) => p.team === 'A').map((p) => p.id), B: this.players.filter((p) => p.team === 'B').map((p) => p.id) };
@@ -1038,6 +1127,8 @@ attach(server, (client) => {
         if (typeof m.boosters === 'boolean') s.boosters = m.boosters;
         if (['easy', 'normal', 'hard'].includes(m.bots)) s.bots = m.bots;
         if (typeof m.teams === 'boolean') s.teams = m.teams;
+        if (typeof m.market === 'boolean') s.market = m.market;
+        if (typeof m.mgSolo === 'boolean') s.mgSolo = m.mgSolo;
         room.broadcast(); break;
       }
       case 'addbot': {

@@ -7,6 +7,33 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const until = async (ctx, ms, done) => { const t0 = Date.now(); while (Date.now() - t0 < ms * ctx.SPEED) { if (done()) return; await ctx.wait(100); } };
 const bots = (ctx) => ctx.players.filter((p) => p.bot);
 const result = (ctx, fn) => { const scores = {}, shows = {}; ctx.players.forEach((p) => { const [s, t] = fn(p); scores[p.id] = s; shows[p.id] = t; }); return { scores, shows }; };
+/* ---------- Jeux d'adresse : cibles à toucher (stand de tir, tape-taupes) ---------- */
+async function popGame(ctx, kind) {
+  const DUR = 30000, mg = ctx.room.mg, T = [];
+  let id = 0, t = 1200;
+  while (t < DUR - 1500) {
+    const r = Math.random(), k = r < 0.12 ? 'gold' : r < 0.27 ? 'bomb' : 'normal';
+    if (kind === 'tir') { const row = ctx.rand(0, 2), dir = Math.random() < 0.5 ? 1 : -1, sp = 2.6 + Math.random() * 2.4 + row * 0.4; T.push({ id: ++id, k, row, dir, sp: +sp.toFixed(2), t0: t, life: Math.round(15 / sp * 1000) }); }
+    else T.push({ id: ++id, k, hole: ctx.rand(0, 8), t0: t, life: k === 'gold' ? 900 : 1300 + ctx.rand(0, 500) });
+    t += kind === 'tir' ? ctx.rand(260, 520) : ctx.rand(330, 620);
+  }
+  const scores = {}, hits = {};
+  ctx.players.forEach((p) => { scores[p.id] = 0; hits[p.id] = []; }); // chacun ses propres cibles
+  mg.popT = T; mg.popHits = hits; mg.popScores = scores; mg.popStart = Date.now();
+  const val = { normal: 1, gold: 3, bomb: -2 };
+  mg.popHit = (pid, tid) => { const x = T.find((q) => q.id === tid); if (!x || !hits[pid] || hits[pid].includes(tid)) return; const el = (Date.now() - mg.popStart) / ctx.SPEED; if (el < x.t0 - 150 || el > x.t0 + x.life + 250) return; hits[pid].push(tid); scores[pid] += val[x.k]; ctx.set({ hits, scores }); };
+  ctx.set({ phase: 'pop', kind, targets: T, hits, scores, dur: DUR, startAt: mg.popStart });
+  // Robots : ils visent les bonnes cibles et évitent (souvent) les bombes
+  bots(ctx).forEach((b) => T.forEach((x) => {
+    const p = x.k === 'bomb' ? 0.06 : Math.min(0.85, (x.k === 'gold' ? 0.3 : 0.22) * ctx.skill);
+    if (Math.random() < p) ctx.later(x.t0 + 150 + Math.random() * Math.min(x.life, 2500) * 0.8, () => mg.popHit && mg.popHit(b.id, x.id));
+  }));
+  await ctx.wait(DUR * ctx.SPEED + 600);
+  mg.popHit = null;
+  ctx.set({ phase: 'done' });
+  return result(ctx, (p) => [scores[p.id], scores[p.id] + ' point' + (Math.abs(scores[p.id]) > 1 ? 's' : '')]);
+}
+function popInput(mg, pid, d) { if (mg.pub.phase === 'pop' && typeof d.hit === 'number' && mg.popHit) mg.popHit(pid, d.hit); }
 const fmtS = (ms) => (ms / 1000).toFixed(2).replace('.', ',') + ' s';
 
 /* ---------- Circuit de kart (le même pour tout le monde) ---------- */
@@ -65,12 +92,13 @@ module.exports = {
 
   chrono: {
     name: 'Chrono Parfait', icon: '⏱️', modes: ['ffa', 'teams', '1vx'],
-    rules: 'Le chrono démarre puis disparaît au bout de 3 secondes. Arrête-le le plus près possible de 7,00 secondes !',
+    rules: 'Le chrono démarre puis disparaît au bout de 3 secondes. Arrête-le le plus près possible du temps demandé (il change à chaque partie : entre 4 et 10 secondes) !',
     async play(ctx) {
-      ctx.set({ phase: 'play', target: 7000, hideAfter: 3000 });
-      bots(ctx).forEach((b) => { const ms = 7000 + Math.round(ctx.rand(-800, 800) / ctx.skill); ctx.later(ms, () => { ctx.inputs[b.id] = { ms }; }); });
-      await until(ctx, 13000, () => ctx.players.every((p) => ctx.inputs[p.id]));
-      return result(ctx, (p) => { const r = ctx.inputs[p.id]; return r ? [-Math.abs(r.ms - 7000), fmtS(r.ms)] : [-7000, 'Pas arrêté']; });
+      const target = ctx.pick([4000, 4500, 5000, 6000, 6500, 7000, 7500, 8000, 9000, 10000]);
+      ctx.set({ phase: 'play', target, hideAfter: Math.min(3000, target - 1500) });
+      bots(ctx).forEach((b) => { const ms = target + Math.round(ctx.rand(-800, 800) / ctx.skill); ctx.later(ms, () => { ctx.inputs[b.id] = { ms }; }); });
+      await until(ctx, target + 6000, () => ctx.players.every((p) => ctx.inputs[p.id]));
+      return result(ctx, (p) => { const r = ctx.inputs[p.id]; return r ? [-Math.abs(r.ms - target), fmtS(r.ms)] : [-target, 'Pas arrêté']; });
     },
     input(mg, pid, d) { if (!mg.inputs[pid] && mg.pub.phase === 'play' && typeof d.ms === 'number') mg.inputs[pid] = { ms: Math.round(clamp(d.ms, 0, 20000)) }; },
   },
@@ -124,11 +152,11 @@ module.exports = {
 
   kart: {
     name: 'Monstro Kart', icon: '🏎️', modes: ['ffa', 'teams', '1vx'],
-    rules: '2 tours de circuit ! Ton kart accélère tout seul : tourne avec ◀ ▶ (ou les flèches du clavier). Sortir de la piste te ralentit.',
+    rules: 'Une course de 2 à 5 tours ! Ton kart accélère tout seul : tourne avec ◀ ▶ (ou les flèches du clavier). Sortir de la piste te ralentit.',
     async play(ctx) {
       const variant = ctx.rand(0, TRACKS.length - 1);
       const tr = makeTrack(variant);
-      const LAPS = 2;
+      const LAPS = ctx.pick([2, 3, 3, 4, 5]);
       const karts = {};
       const grid = ctx.players.map((p, i) => p.id);
       grid.forEach((pid, i) => { const s = trackAt(tr, -12 - i * 26); karts[pid] = { x: Math.round(s.x), y: Math.round(s.y), a: s.a, prog: 0, fin: null, slot: i }; });
@@ -138,7 +166,7 @@ module.exports = {
       ctx.set({ phase: 'race', track: { pts: tr.pts, w: tr.w, laps: LAPS, N: tr.N, name: tr.name, ground: tr.ground, road: tr.road, deco: tr.deco, ice: tr.ice, variant: tr.variant }, karts, startAt: Date.now() });
       const t0 = Date.now();
       const botDist = {}; bots(ctx).forEach((b) => { botDist[b.id] = -12 - karts[b.id].slot * 26; });
-      while (Date.now() - t0 < 55000 * ctx.SPEED) {
+      while (Date.now() - t0 < (20000 * LAPS + 20000) * ctx.SPEED) {
         await ctx.wait(150);
         const el = (Date.now() - t0);
         bots(ctx).forEach((b) => {
@@ -174,6 +202,19 @@ module.exports = {
     },
   },
 
+  tir: {
+    name: 'Stand de tir', icon: '🎯', modes: ['ffa', 'teams', '1vx'],
+    rules: 'Chacun a son propre stand : des cibles défilent sur trois rangées, clique (ou touche) pour tirer ! Cible = 1 point, cible dorée = 3, mais évite les bombes (−2). Classement au meilleur score après 30 secondes.',
+    play(ctx) { return popGame(ctx, 'tir'); },
+    input(mg, pid, d) { popInput(mg, pid, d); },
+  },
+  taupes: {
+    name: 'Tape-taupes', icon: '🔨', modes: ['ffa', 'teams', '1vx'],
+    rules: 'Chacun son jardin : les taupes sortent de 9 trous, tape-les avant qu’elles ne replongent ! Taupe = 1 point, taupe dorée = 3, mais ne tape pas la Reine (−2). Classement au meilleur score après 30 secondes.',
+    play(ctx) { return popGame(ctx, 'taupes'); },
+    input(mg, pid, d) { popInput(mg, pid, d); },
+  },
+
   rink: {
     name: 'Patinoire Givrée', icon: '⛸️', modes: ['ffa', 'teams', '1vx'],
     rules: 'Glisse sur la glace et ramasse un maximum de gemmes en 40 secondes ! Gemme bleue = 1 point, gemme dorée = 3. Dirige ton Monstro en faisant glisser ton doigt (ou avec les flèches du clavier). Attention, ça glisse !',
@@ -207,6 +248,7 @@ module.exports = {
           const r = Math.hypot(s.x, s.z);
           if (r > R - 0.6) { s.x *= (R - 0.6) / r; s.z *= (R - 0.6) / r; v.vx *= -0.4; v.vz *= -0.4; }
           if (r < IN) { s.x *= IN / (r || 1); s.z *= IN / (r || 1); }
+          ctx.players.forEach((o) => { if (o.id === b.id) return; const q = skaters[o.id], dx = s.x - q.x, dz = s.z - q.z, d = Math.hypot(dx, dz); if (d < 1.15 && d > 0.01) { s.x += dx / d * (1.15 - d); s.z += dz / d * (1.15 - d); v.vx = dx / d * 2.5; v.vz = dz / d * 2.5; } }); // chocs
           s.a = Math.atan2(v.vx, v.vz); s.m = 1;
           s.x = +s.x.toFixed(2); s.z = +s.z.toFixed(2);
           gems.slice().forEach((g) => { if (Math.hypot(g.x - s.x, g.z - s.z) < 0.85) take(b.id, g); });
@@ -349,22 +391,31 @@ module.exports = {
     rules: 'Le Gardien (seul) verrouille 2 portes sur 5. Les autres choisissent chacun une porte : ceux qui tombent sur une porte verrouillée sont attrapés !',
     async play(ctx) {
       const solo = ctx.teams.A[0], team = ctx.teams.B;
-      const doors = 5;
-      ctx.room.mg.locks = null; ctx.room.mg.picks = {};
-      ctx.set({ phase: 'pick', doors, solo, picked: [] });
+      const doors = 5, mg = ctx.room.mg;
       const sp = ctx.players.find((p) => p.id === solo);
-      if (sp.bot) ctx.later(ctx.rand(1500, 4000), () => { ctx.room.mg.locks = ctx.shuffle([0, 1, 2, 3, 4]).slice(0, 2); });
-      bots(ctx).filter((b) => b.id !== solo).forEach((b) => ctx.later(ctx.rand(1500, 5000), () => { ctx.room.mg.picks[b.id] = ctx.rand(0, 4); ctx.set({ picked: Object.keys(ctx.room.mg.picks) }); }));
-      await until(ctx, 15000, () => ctx.room.mg.locks && team.every((pid) => ctx.room.mg.picks[pid] != null));
-      const locks = ctx.room.mg.locks || ctx.shuffle([0, 1, 2, 3, 4]).slice(0, 2);
-      team.forEach((pid) => { if (ctx.room.mg.picks[pid] == null) ctx.room.mg.picks[pid] = ctx.rand(0, 4); });
-      const caught = team.filter((pid) => locks.includes(ctx.room.mg.picks[pid]));
-      ctx.set({ phase: 'reveal', locks, picks: ctx.room.mg.picks, caught });
-      await ctx.sleep(3500);
-      return { winner: caught.length * 2 >= team.length ? 'A' : 'B', note: caught.length + ' attrapé(s) sur ' + team.length };
+      let alive = team.slice(); const caughtAll = [];
+      for (let round = 1; round <= 2 && alive.length; round++) {
+        const ph = round === 1 ? 'pick' : 'pick2';
+        mg.locks = null; mg.picks = {}; mg.alive = alive;
+        ctx.set({ phase: ph, round, doors, solo, picked: [], alive, caughtAll });
+        if (sp.bot) ctx.later(ctx.rand(1500, 4000), () => { mg.locks = ctx.shuffle([0, 1, 2, 3, 4]).slice(0, 2); });
+        bots(ctx).filter((b) => alive.includes(b.id)).forEach((b) => ctx.later(ctx.rand(1500, 5000), () => { mg.picks[b.id] = ctx.rand(0, 4); ctx.set({ picked: Object.keys(mg.picks) }); }));
+        await until(ctx, 15000, () => mg.locks && alive.every((pid) => mg.picks[pid] != null));
+        const locks = mg.locks || ctx.shuffle([0, 1, 2, 3, 4]).slice(0, 2);
+        alive.forEach((pid) => { if (mg.picks[pid] == null) mg.picks[pid] = ctx.rand(0, 4); });
+        const caught = alive.filter((pid) => locks.includes(mg.picks[pid]));
+        caughtAll.push(...caught);
+        alive = alive.filter((pid) => !caught.includes(pid));
+        const bonus = round === 1 && caught.length > 0 && alive.length > 0;
+        ctx.set({ phase: round === 1 ? 'reveal' : 'reveal2', locks, picks: mg.picks, caught, caughtAll, bonus });
+        await ctx.sleep(3500);
+        if (!bonus) break; // le Gardien rejoue seulement s'il a attrapé quelqu'un
+      }
+      return { winner: caughtAll.length * 2 >= team.length ? 'A' : 'B', note: caughtAll.length + ' attrapé(s) sur ' + team.length };
     },
     input(mg, pid, d, room) {
-      if (mg.pub.phase !== 'pick') return;
+      if (mg.pub.phase !== 'pick' && mg.pub.phase !== 'pick2') return;
+      if (pid !== mg.pub.solo && !(mg.alive || []).includes(pid)) return;
       if (pid === mg.pub.solo) { if (Array.isArray(d.locks) && d.locks.length === 2 && d.locks[0] !== d.locks[1] && d.locks.every((x) => x >= 0 && x < 5)) { mg.locks = d.locks.map(Number); room.broadcast(); } return; }
       if (mg.picks[pid] == null && typeof d.door === 'number' && d.door >= 0 && d.door < 5) { mg.picks[pid] = d.door; mg.pub.picked = Object.keys(mg.picks); room.broadcast(); }
     },

@@ -13,6 +13,16 @@ L'archipel de Monstralia. 12 Monstros originaux, chacun avec son histoire, s'aff
 | Méga City | Docteur Chaos | 💠 crédits | 🏅 Médaille (2 en jeu) | ⚡ Super-vitesse, 🔌 panne de courant |
 | Mine Profonde | La Reine Taupe | 🔶 pépites | 💎 Cristal (1 fois sur 4 : Cristal géant = 2) | 🕳️ passages secrets, 🪨 éboulement, 🛤️ wagon fou |
 
+## Ce qui rend chaque carte unique
+- Vallée Jurassique : deux grandes boucles en forme de 8, des raccourcis dans chaque boucle et une rivière qui serpente entre elles (on la traverse par des ponts). Avec étage : un plateau en hauteur. Transport : 🦅 Ptéro-taxi.
+- Île aux Pirates : une île centrale entourée de 5 navires ; on passe de bateau en bateau par des passerelles. Transport : ⛵ Barque.
+- Méga City : des rues en blocs carrés et un grand pont. Avec étage : trois toits d'immeubles reliés par des passerelles. Transport : 🚁 Hélicoptère.
+- Mine Profonde : trois cavernes reliées par des galeries. Transport : 🛤️ Wagon.
+- Récif aux 8 Îlots (nouveau) : huit îlots reliés par des ponts de corde au-dessus d'un lagon plein de coraux ; deux grands ponts se croisent au centre (l'un passe sous l'autre). On va d'îlot en îlot par des bancs de sable, sous l'eau à marée haute (2 tours sur 4), ou en ⛵ bateau-navette. Case spéciale : 🌊 Raz-de-marée. Boss : Reine Méduse. Monnaie : coquillages, étoile : Corail d'or. Famille de cartes Récif (+2 pièces à chaque transport).
+- Sur chaque carte moyenne, un grand pont passe au-dessus d'autres chemins. La Vallée Jurassique a un grand volcan actif au cœur du plateau : il entre en éruption sur la case spéciale.
+- ⚙️ Case Terrain : le plateau bouge, un chemin se ferme 2 tours ou se rouvre, avec tremblement.
+- Jour et nuit : jour, jour, crépuscule, nuit, nuit, aube (tous les 6 tours). La nuit, l'étoile coûte 5 de moins (sauf dans la Mine, toujours sous terre).
+
 ## Options de partie (choisies par l'hôte)
 - Taille du plateau : petit (30 cases), moyen (50 cases), grand (80 cases, deux zones reliées par des ponts).
 - Étages : un niveau supérieur, relié par des escaliers (plateaux moyen et grand).
@@ -22,6 +32,7 @@ L'archipel de Monstralia. 12 Monstros originaux, chacun avec son histoire, s'aff
 - Étoiles bonus à la fin : tirées au hasard parmi 12 (2 en partie de 5 ou 10 tours, 3 au-delà), ou aucune.
 - Jeux d'argent : oui ou non (casino, paris sur les mini-jeux, tickets à gratter).
 - Boosters de cartes : oui ou non.
+- Bourse : le prix des étoiles et de la boutique monte ou descend à chaque tour (entre −40 % et +60 %). Un petit graphique en bas à droite du plateau suit les prix.
 - Niveau des robots : facile, normal ou difficile.
 - Équipes : chacun pour soi, ou bleus contre rouges (4 joueurs minimum). L'hôte touche le badge d'un joueur pour changer son équipe. À la fin, on additionne les étoiles puis les pièces de chaque équipe.
 
@@ -33,6 +44,9 @@ L'archipel de Monstralia. 12 Monstros originaux, chacun avec son histoire, s'aff
 - Les cases 🎲 Chance et 🌀 Chamboulement peuvent tout renverser (transfert d'étoile, partage des pièces, positions mélangées…).
 - Les 3 derniers tours : la roue de la Dernière ligne droite aide le dernier, et les cases comptent double.
 - Objets (3 maximum) : double dé, triple dé, dé pipé, grappin, échangeur, bouclier, piège, boussole d'étoile, fantôme voleur, boîte mystère.
+- Ordre de passage : affiché en haut du plateau. Tous les 6 tours, chacun lance un dé de 10 et l'ordre change. L'objet ⏳ Sablier (6 pièces) te fait jouer en premier dès le tour suivant.
+- 🟡 Tuyau d'or (32 pièces) : il t'emmène directement sur l'étoile. Tu peux l'acheter, puis ton tour s'arrête.
+- 😈 Case Boss (façon Bowser) : le boss de la région apparaît, la terre tremble, et sa roue décide de la punition (−10, −20, impôt pour tous, retour au départ, objets confisqués, parfois une étoile… ou rarement +5).
 - Événements de région : un chemin peut être bloqué pendant 2 tours (dino endormi, marée haute, travaux, éboulement).
 - Équilibrage : pas de vol ou d'échange d'étoiles par la case Chance avant le tour 3, et un échange d'étoiles avec trop d'écart devient un don d'une seule étoile. Fantôme voleur : 40 pièces. Le dernier du classement qui finit sur le podium d'un mini-jeu gagne 2 pièces de consolation.
 - Fin de partie : écran des statistiques, puis étoiles bonus et podium.
@@ -60,13 +74,17 @@ L'archipel de Monstralia. 12 Monstros originaux, chacun avec son histoire, s'aff
 - Légendaires (3 %) : Étoile filante (+1 étoile), Trésor de Monstralia (+25).
 - Album 🃏 consultable pendant la partie, et étoile bonus « Collectionneur » possible à la fin.
 
-## 14 mini-jeux
+## 16 mini-jeux
 Chacun pour soi, équipes (bleu contre rouge selon la dernière case), un contre tous, et coopération :
 Dégaine !, Gâteau Turbo, Chrono Parfait, Compte-les !, Les Coffres, Monstro Kart, Ballons Pop, Patate Bombe,
-Mémo-Monstre, Tir à la corde, Les Portes du Gardien, Le Coffre-fort, Synchro Parfaite, Patinoire Givrée (en 3D : ramasse les gemmes sur la glace).
+Mémo-Monstre, Tir à la corde, Les Portes du Gardien, Le Coffre-fort, Synchro Parfaite, Patinoire Givrée (en 3D : ramasse les gemmes sur la glace). Stand de tir (en 3D : tire sur les cibles, évite les bombes) et Tape-taupes (en 3D : tape les taupes, pas la Reine). Au tir et aux taupes, chacun a ses propres cibles : classement au meilleur score.
+Option « Mini-jeux : chacun pour soi » : tous les mini-jeux se jouent en solo, avec un classement au score ou au temps.
+Dégaine/Chrono : le temps à viser change à chaque partie (de 4 à 10 s). Portes du Gardien : si le Gardien attrape quelqu'un, il a une 2e chance contre ceux qui restent. Monstro Kart et la Patinoire ont des collisions entre joueurs ; le kart se court en 2 à 5 tours avec une caméra qui suit ton kart et une mini-carte.
 Monstro Kart a 8 circuits : Ovale de Monstralia, Anneau de Méga City, Grand Huit, Trèfle du Volcan, Étoile du Désert, Cacahuète des Mines, Côte des Pirates, Glacier Glissant.
 
 ## Graphismes 3D
+- Illustrations 3D (dés, objets, cases, cartes spéciales) à la place des émojis dans les menus et sur les cases.
+- Reflets réalistes (métal, vernis, eau), textures de sol et de chemin, ciel de jour et de nuit.
 - Le plateau est affiché en vraie 3D avec Three.js (fichier `public/vendor/three.module.js`, licence MIT) : terrain, décors modélisés, lumière, ombres, eau animée, créatures volantes.
 - Les Monstros sont des personnages 3D (tête, corps, bras, jambes) qui marchent, sautent et saluent.
 - Si un appareil ne gère pas la 3D, le jeu passe automatiquement en affichage 2D.

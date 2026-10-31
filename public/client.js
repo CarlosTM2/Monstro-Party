@@ -62,10 +62,11 @@
       case 'toast': toast(m.text); break;
       case 'dice': showDice(m); break;
       case 'move': animMove(m.pid, m.path); break;
-      case 'teleport': animTeleport(m.pid, m.to, m.fly); break;
+      case 'teleport': animTeleport(m.pid, m.to, m.fly, m.ride); break;
       case 'fx': onFx(m); break;
       case 'banner': banner(m.text); break;
       case 'land': landShow(m); break;
+      case 'order': orderShow(m); break;
       case 'roulette': roulette(m); break;
       case 'casino': casinoShow(m); break;
       case 'booster': boosterShow(m); break;
@@ -141,6 +142,8 @@
     seg($('bonusChoice'), [[true, st.turns <= 10 ? '2 au hasard' : '3 au hasard'], [false, 'Aucune']], st.bonus, H, (v) => send({ t: 'settings', bonus: v }));
     seg($('boosterChoice'), [[true, 'Oui'], [false, 'Non']], st.boosters, H, (v) => send({ t: 'settings', boosters: v }));
     seg($('botsChoice'), [['easy', 'Facile'], ['normal', 'Normal'], ['hard', 'Difficile']], st.bots || 'normal', H, (v) => send({ t: 'settings', bots: v }));
+    seg($('mgSoloChoice'), [[false, 'Mélangés'], [true, 'Chacun pour soi']], !!st.mgSolo, H, (v) => send({ t: 'settings', mgSolo: v }));
+    seg($('marketChoice'), [[true, 'Oui'], [false, 'Non']], st.market !== false, H, (v) => send({ t: 'settings', market: v }));
     seg($('teamsChoice'), [[false, 'Chacun pour soi'], [true, 'En équipes']], !!st.teams, H, (v) => send({ t: 'settings', teams: v }));
     seg($('gamblingChoice'), [[true, 'Oui'], [false, 'Non']], st.gambling, H, (v) => send({ t: 'settings', gambling: v }));
     const B = makeBoard(st.theme, st.size, st.floors);
@@ -170,7 +173,7 @@
   /* ---------- Aide ---------- */
   function showHelp() {
     const th = S ? THEMES[S.settings.theme] : THEMES.jurassic;
-    const cases = [['#3b82f6', '+', 'Case bleue : +3 pièces'], ['#ef4444', '−', 'Case rouge : −3 pièces'], ['#a855f7', '?', 'Événement surprise'], ['#06b6d4', '🎁', 'Objet gratuit'], ['#ec4899', '🛒', 'Boutique (aussi en passant)'], ['#84cc16', '🪺', 'Nid : adopter un compagnon'], ['#facc15', '🎲', 'Chance : deux joueurs tirés au sort, un transfert qui peut tout changer'], ['#0f172a', '🌀', 'Chamboulement : remet tout en jeu'], ['#f59e0b', th.special.icon, th.special.name + ' : ' + th.special.desc], ['#111827', '🕳️', 'Passage secret (Mine)'], ['#15803d', '🎰', 'Casino : machine à sous, roulette ou pile ou face (mise 5, 10 ou 20)']];
+    const cases = [['#3b82f6', '+', 'Case bleue : +3 pièces'], ['#ef4444', '−', 'Case rouge : −3 pièces'], ['#a855f7', '?', 'Événement surprise'], ['#06b6d4', '🎁', 'Objet gratuit'], ['#ec4899', '🛒', 'Boutique (aussi en passant)'], ['#84cc16', '🪺', 'Nid : adopter un compagnon'], ['#facc15', '🎲', 'Chance : deux joueurs tirés au sort, un transfert qui peut tout changer'], ['#0f172a', '🌀', 'Chamboulement : remet tout en jeu'], ['#f59e0b', th.special.icon, th.special.name + ' : ' + th.special.desc], ['#111827', th.warp.icon, th.warp.name + ' : un transport qui t’emmène vers une autre case (ptéro-taxi, barque, métro ou wagon selon la région)'], ['#15803d', '🎰', 'Casino : machine à sous, roulette ou pile ou face (mise 5, 10 ou 20)'], ['#0d9488', '🔁', 'Troc : échange une carte de famille avec un joueur'], ['#7f1d1d', '😈', 'Boss : le boss de la région fait tourner sa roue des punitions'], ['#b45309', '⚙️', 'Terrain : le plateau bouge, un chemin se ferme ou se rouvre']];
     const box = document.createElement('div');
     box.className = 'help';
     box.innerHTML = '<div class="help-in"><button class="btn small ghost hx">Fermer ✕</button><h1>Comment jouer</h1>' +
@@ -201,7 +204,7 @@
   let USE3D = false;
   function try3D() {
     if (USE3D || !window.Scene3D) return;
-    USE3D = window.Scene3D.init($('board3d'), { onArrow: (v) => { initAudio(); sfx.tap(); send({ t: 'answer', value: v }); } });
+    USE3D = window.Scene3D.init($('board3d'), { onArrow: (v) => { initAudio(); sfx.tap(); send({ t: 'answer', value: v }); }, onTile: tileTip });
     document.body.classList.toggle('three', USE3D);
     if (USE3D) {
       Object.assign(PORTRAIT, window.Scene3D.portraits());
@@ -253,9 +256,10 @@
     anims[pid] = { kind: 'path', pts: [from].concat(path.map(nodePos)), t0: performance.now(), step: 260, lastStep: 0 };
     if (p0) p0.pos = path[path.length - 1];
   }
-  function animTeleport(pid, to, fly) {
+  function animTeleport(pid, to, fly, ride) {
     if (!S) return;
     const from = disp[pid] ? Object.assign({}, disp[pid]) : nodePos(to);
+    if (ride) { anims[pid] = { kind: 'fly', from, to: nodePos(to), t0: performance.now(), dur: 2400, fly: ride === 'ptero' || ride === 'heli', ride }; const p0 = S.players.find((p) => p.id === pid); if (p0) p0.pos = to; sfx.item(); return; }
     anims[pid] = { kind: 'fly', from, to: nodePos(to), t0: performance.now(), dur: fly ? 900 : 600, fly };
     const p0 = S.players.find((p) => p.id === pid); if (p0) p0.pos = to;
     if (!fly) { fxs.push({ kind: 'ring', x: from.x, y: from.y, z: from.z, t0: performance.now() }); if (USE3D) Scene3D.fx('ring', from); }
@@ -266,10 +270,13 @@
     const pos = p && disp[p.id] ? disp[p.id] : null;
     if (m.kind === 'coins' && pos && m.n) { floatText((m.n > 0 ? '+' : '') + m.n + ' ' + coinIcon(), pos, m.n > 0 ? '#fde047' : '#f87171'); (m.n > 0 ? sfx.coin : sfx.bad)(); }
     if (m.kind === 'gotstar' && pos) { floatText('+' + (m.n || 1) + ' ' + starIcon(), pos, '#fde047', 34); sfx.star(); fxs.push({ kind: 'burst', x: pos.x, y: pos.y, z: pos.z, t0: performance.now() }); if (USE3D) Scene3D.fx('burst', pos); }
-    if (m.kind === 'special' && pos) { floatText(m.icon, pos, '#fff', 54); sfx.bad(); }
+    if (m.kind === 'special' && pos) { floatText(m.icon, pos, '#fff', 54); sfx.bad(); if (USE3D && S.settings.theme === 'jurassic' && Scene3D.erupt) Scene3D.erupt(); }
     if (m.kind === 'item' && pos) { floatText(m.icon, pos, '#fff', 44); sfx.item(); }
     if (m.kind === 'shield' && pos) floatText('🛡️', pos, '#fff', 44);
     if (m.kind === 'event' && pos) floatText('❓', pos, '#fff', 44);
+    if (m.kind === 'quake') { sfx.bad(); if (USE3D && Scene3D.quake) Scene3D.quake(); }
+    if (m.kind === 'boss' && pos) { sfx.bad(); if (USE3D && Scene3D.boss) Scene3D.boss(pos, S.settings.theme); else floatText('😈', pos, '#fff', 70); }
+    if (m.kind === 'pipe' && pos) { sfx.item(); if (USE3D && Scene3D.pipe) Scene3D.pipe(pos); else floatText('🟡', pos, '#fff', 54); }
     if (m.kind === 'star') { const n = nodePos(m.node); fxs.push({ kind: 'burst', x: n.x, y: n.y, z: n.z, t0: performance.now() }); }
   }
   function floatText(txt, pos, color, size) {
@@ -282,8 +289,8 @@
     setTimeout(() => d.remove(), 1500);
   }
 
-  const COL = { blue: '#3b82f6', red: '#ef4444', event: '#a855f7', item: '#06b6d4', shop: '#ec4899', nest: '#84cc16', chance: '#facc15', chaos: '#1e293b', special: '#f59e0b', tunnel: '#111827', start: '#ffffff', casino: '#15803d', trade: '#0d9488' };
-  const ICON = { item: '🎁', shop: '🛒', nest: '🪺', chance: '🎲', chaos: '🌀', tunnel: '🕳️', casino: '🎰', trade: '🔁' };
+  const COL = { blue: '#3b82f6', red: '#ef4444', event: '#a855f7', item: '#06b6d4', shop: '#ec4899', nest: '#84cc16', chance: '#facc15', chaos: '#1e293b', special: '#f59e0b', tunnel: '#111827', start: '#ffffff', casino: '#15803d', trade: '#0d9488', boss: '#7f1d1d', shift: '#b45309' };
+  const ICON = { item: '🎁', shop: '🛒', nest: '🪺', chance: '🎲', chaos: '🌀', tunnel: '🕳️', casino: '🎰', trade: '🔁', boss: '😈', shift: '⚙️' };
   const SWAY = ['🌴', '🌿', '🍃', '🌾', '🪵'];
   const FLYERS = { jurassic: ['🦅', '🦋'], pirate: ['🦜', '🕊️'], heroes: ['🚁', '🦸'], mine: ['🦇', '🦇'] };
   const shadeC = (hex, f) => { const n = parseInt(hex.slice(1), 16); const ch = (v) => Math.max(0, Math.min(255, Math.round(f < 0 ? v * (1 + f) : v + (255 - v) * f))); return 'rgb(' + ch(n >> 16) + ',' + ch((n >> 8) & 255) + ',' + ch(n & 255) + ')'; };
@@ -362,7 +369,7 @@
         x.strokeStyle = n.t === 'start' ? '#3b0764' : 'rgba(255,255,255,.95)'; x.lineWidth = 2.5; x.stroke();
         if (n.t === 'event') { x.fillStyle = '#fff'; x.font = 'bold 17px Fredoka, sans-serif'; x.fillText('?', p.X, p.Y); }
         else if (n.t === 'special') { x.font = '16px serif'; x.fillText(B.special.icon, p.X, p.Y - 2); }
-        else if (ICON[n.t]) { x.font = '15px serif'; x.fillText(ICON[n.t], p.X, p.Y - 1); }
+        else if (ICON[n.t]) { x.font = '15px serif'; x.fillText(n.t === 'tunnel' && B.warp ? B.warp.icon : ICON[n.t], p.X, p.Y - 1); }
         else if (n.t === 'start') { x.fillStyle = '#3b0764'; x.font = 'bold 11px Fredoka, sans-serif'; x.fillText('GO', p.X, p.Y); }
         else { x.fillStyle = 'rgba(255,255,255,.9)'; x.font = 'bold 14px Fredoka, sans-serif'; x.fillText(n.t === 'blue' ? '+' : '−', p.X, p.Y); }
       });
@@ -412,7 +419,7 @@
       const pv = playerViews(now);
       const pr = S.prompt;
       Scene3D.frame(now, {
-        board: B, players: pv, current: S.current, stars: S.stars, traps: S.traps, blocks: S.blocks,
+        board: B, players: pv, current: S.current, stars: S.stars, traps: S.traps, blocks: S.blocks, tide: S.tide, day: S.settings.theme === 'mine' ? 'jour' : (window.__day || window.PARTY.dayPhase(S.turn)),
         fork: pr && pr.kind === 'fork' && pr.pid === ME ? pr.data.options : null, mePos: disp[ME],
         focus: focusP ? (disp[focusP.id] || nodePos(focusP.pos)) : null,
       });
@@ -530,7 +537,7 @@
       const grp = groups[p.pos] || [p], i = grp.indexOf(p), nG = grp.length;
       const base = nodePos(p.pos);
       const off = nG > 1 ? { x: Math.cos((i / nG) * Math.PI * 2) * (USE3D ? 30 : 20), y: Math.sin((i / nG) * Math.PI * 2) * (USE3D ? 26 : 16) } : { x: 0, y: 0 };
-      let pos = { x: base.x + off.x, y: base.y + off.y, z: base.z }, hop = 0, alpha = 1;
+      let pos = { x: base.x + off.x, y: base.y + off.y, z: base.z }, hop = 0, alpha = 1, ride = null;
       const a = anims[p.id];
       if (a) {
         const el = Math.max(0, now - a.t0);
@@ -545,11 +552,11 @@
         } else {
           const tt = Math.min(1, el / a.dur);
           if (tt >= 1) delete anims[p.id];
-          else { pos = { x: a.from.x + (a.to.x - a.from.x) * tt, y: a.from.y + (a.to.y - a.from.y) * tt, z: (a.from.z || 0) + ((a.to.z || 0) - (a.from.z || 0)) * tt }; hop = a.fly ? Math.sin(tt * Math.PI) * 160 : 0; if (!a.fly) alpha = tt < 0.5 ? 1 - tt * 2 : (tt - 0.5) * 2; }
+          else { pos = { x: a.from.x + (a.to.x - a.from.x) * tt, y: a.from.y + (a.to.y - a.from.y) * tt, z: (a.from.z || 0) + ((a.to.z || 0) - (a.from.z || 0)) * tt }; hop = a.fly ? Math.sin(tt * Math.PI) * (a.ride ? 220 : 160) : a.ride === 'metro' ? -Math.sin(tt * Math.PI) * 30 : 0; if (!a.fly && !a.ride) alpha = tt < 0.5 ? 1 - tt * 2 : (tt - 0.5) * 2; ride = a.ride; }
         }
       }
       disp[p.id] = pos;
-      out.push({ p, pos, hop, alpha, moving: !!a });
+      out.push({ p, pos, hop, alpha, moving: !!a, ride });
     });
     return out;
   }
@@ -591,12 +598,27 @@
   let promptTimer = null;
   const CAS = { game: null };
   let TRADE = {};
+  const FXK = { coins5: 'coins5', coins12: 'coins12', coins25: 'coins25', item: 'item', dice2: 'dice2', dice5: 'dice5', shield: 'shield', companion: 'companion', steal: 'steal', star: 'star', lose5: 'lose5', slow2: 'slow2', tax5: 'tax5', 'die:petit': 'petit', 'die:mini': 'mini', 'die:deux': 'deux' };
+  const ICO = () => (USE3D && window.Scene3D && window.Scene3D.icons ? window.Scene3D.icons() : {});
+  function ico(key, emoji, size) { const u = ICO()[key]; return u ? '<img class="ico" src="' + u + '" alt="" style="width:' + (size || 26) + 'px;height:' + (size || 26) + 'px">' : (emoji || ''); }
+  window.__ico = ico;
   function renderGame(prev) {
     const B = board();
     $('gTitle').innerHTML = B.emoji + ' ' + esc(B.name) + (S.lastChance && S.lastChance.label ? ' <span class="tag">🔥 ' + esc(S.lastChance.label) + '</span>' : '') + (S.mods && S.mods.sale ? ' <span class="tag">🏷️ Soldes</span>' : '') + (S.mods && S.mods.blackout ? ' <span class="tag">🔌 Panne</span>' : '');
     $('gTurn').textContent = S.phase === 'end' ? 'Fin !' : 'Tour ' + Math.max(1, S.turn) + ' / ' + S.settings.turns;
     let tp = $('turnPill'); if (!tp) { tp = document.createElement('div'); tp.id = 'turnPill'; tp.className = 'turn-pill'; document.querySelector('.board-wrap').appendChild(tp); }
-    tp.innerHTML = S.phase === 'end' ? 'Fin !' : 'Tour<b>' + Math.max(1, S.turn) + '/' + S.settings.turns + '</b>';
+    const DPI = { jour: '☀️', 'crépuscule': '🌇', nuit: '🌙', aube: '🌅' };
+    tp.innerHTML = S.phase === 'end' ? 'Fin !' : 'Tour<b>' + Math.max(1, S.turn) + '/' + S.settings.turns + '</b>' + (S.settings.theme !== 'mine' ? '<span class="dp" title="' + window.PARTY.dayPhase(S.turn) + '">' + DPI[window.PARTY.dayPhase(S.turn)] + '</span>' : '');
+    let ob = $('orderBar'); if (!ob) { ob = document.createElement('div'); ob.id = 'orderBar'; ob.className = 'order-bar'; document.querySelector('.board-wrap').appendChild(ob); }
+    ob.innerHTML = '<small>Ordre</small>' + S.players.map((p, i) => '<span class="ob' + (p.id === S.current ? ' cur' : '') + '" style="border-color:' + p.color + '" title="' + esc(p.name) + '">' + mini(p.char, 26) + '<i>' + (i + 1) + '</i></span>').join('');
+    if (S.settings.market && S.market) {
+      const M = S.market, h = M.hist || [], prev = h.length > 1 ? h[h.length - 2] : [1, 1];
+      const st = S.stars && S.stars[0] ? Math.round(S.stars[0].price * M.star) : Math.round(20 * M.star);
+      const arrow = (a, b) => (a > b + 0.001 ? '<em class="up">▲</em>' : a < b - 0.001 ? '<em class="dn">▼</em>' : '');
+      const spark = (k) => { if (h.length < 2) return ''; const W = 46, Hh = 16, mn = 0.6, mx = 1.6; return '<svg width="' + W + '" height="' + Hh + '"><polyline fill="none" stroke="currentColor" stroke-width="2" points="' + h.map((v, i) => (i * W / (h.length - 1)).toFixed(1) + ',' + (Hh - (v[k] - mn) / (mx - mn) * Hh).toFixed(1)).join(' ') + '"/></svg>'; };
+      let mk = $('mktBar'); if (!mk) { mk = document.createElement('div'); mk.id = 'mktBar'; mk.className = 'mkt-bar'; document.querySelector('.board-wrap').appendChild(mk); }
+      mk.innerHTML = '<b>📈 Bourse</b><span>' + starIcon() + ' ' + st + ' ' + arrow(M.star, prev[0]) + spark(0) + '</span><span>🛒 ' + (M.shop >= 1 ? '+' : '') + Math.round((M.shop - 1) * 100) + ' % ' + arrow(M.shop, prev[1]) + spark(1) + '</span>';
+    } else { const mk = $('mktBar'); if (mk) mk.remove(); }
     $('btnCam').classList.remove('hidden');
     $('btnBag').classList.remove('hidden');
     $('btnAlbum').classList.toggle('hidden', !S.settings.boosters);
@@ -606,7 +628,7 @@
       (p.power ? '<span title="' + esc(GAME.powers[p.power].name + ' : ' + GAME.powers[p.power].desc) + '">' + GAME.powers[p.power].icon + '</span>' : '') +
       (p.companion ? '<span title="' + esc(GAME.companions[p.companion].name + ' : ' + GAME.companions[p.companion].desc) + '">' + GAME.companions[p.companion].icon + '</span>' : '') +
       (S.settings.boosters && p.cards && p.cards.length ? '<span class="sep">|</span><span title="Cartes différentes">🃏' + new Set(p.cards).size + '</span>' + Object.keys(FAMILIES).map((f) => { const l = famLevel(p.cards, f); return l ? '<span class="fam' + l + '" title="' + esc(FAMILIES[f].name + ' : ' + FAMILIES[f].bonus[l - 1]) + '">' + FAMILIES[f].icon + (l === 2 ? '★' : '') + '</span>' : ''; }).join('') : '') + (p.buff ? '<span title="Bonus au prochain dé">' + (p.buff < 0 ? '🐌' + p.buff : '👟+' + p.buff) + '</span>' : '') + (p.die ? '<span title="' + esc(GAME.dice[p.die].label + ' : ' + GAME.dice[p.die].desc) + '">' + GAME.dice[p.die].icon + (p.dieUses ? '<sub>' + p.dieUses + '</sub>' : '') + '</span>' : '') +
-      (p.items.length ? '<span class="sep">|</span>' + p.items.map((k) => '<span title="' + esc(GAME.items[k].name) + '">' + GAME.items[k].icon + '</span>').join('') : '') + '</div></div></div>').join('');
+      (p.items.length ? '<span class="sep">|</span>' + p.items.map((k) => '<span title="' + esc(GAME.items[k].name) + '">' + ico(k, GAME.items[k].icon, 20) + '</span>').join('') : '') + '</div></div></div>').join('');
     renderPrompt(prev);
   }
 
@@ -626,16 +648,17 @@
         const hand = d.hand || [];
         const sec = (title, body) => '<div class="inv-sec"><div class="inv-h">' + title + '</div><div class="inv-b">' + body + '</div></div>';
         html = '<span class="msg">À toi ! ' + (d.items.length || hand.length ? 'Utilise un objet et/ou une carte si tu veux, puis lance un dé.' : 'Choisis ton dé.') + '</span><div class="inv-panel">' +
-          sec('🎲 Dés', d.dice.map((k) => '<button class="btn opt" data-a="' + A({ dice: k }) + '">' + GAME.dice[k].icon + ' ' + esc(GAME.dice[k].label) + '<small>' + esc(GAME.dice[k].desc) + (k === me.die && me.dieUses ? ' — encore ' + me.dieUses : '') + '</small></button>').join('')) +
-          sec('🎒 Objets <small>' + me.items.length + '/3</small>', d.items.length ? d.items.map((it) => '<button class="btn opt ghosty" data-a="' + A({ item: it.i }) + '">' + GAME.items[it.k].icon + ' ' + esc(GAME.items[it.k].name) + '<small>' + esc(GAME.items[it.k].desc) + '</small></button>').join('') : '<span class="inv-empty">' + (me.items.length ? 'Déjà utilisé ce tour' : 'Vide') + '</span>') +
-          (S.settings.boosters ? sec('🃏 Cartes <small>' + (me.hand || []).length + '/5</small>', hand.length ? hand.map((h) => { const c = CARDS[h.id]; return '<button class="btn opt cardb ' + c.rarity + '" data-a="' + A({ card: h.i }) + '">' + c.icon + ' ' + esc(c.name) + '<small>' + esc(c.desc) + '</small></button>'; }).join('') : '<span class="inv-empty">' + ((me.hand || []).length ? 'Déjà jouée ce tour' : 'Aucune carte à jouer') + '</span>') : '') +
+          sec('🎲 Dés', d.dice.map((k) => '<button class="btn opt" data-a="' + A({ dice: k }) + '">' + ico(k, GAME.dice[k].icon) + ' ' + esc(GAME.dice[k].label) + '<small>' + esc(GAME.dice[k].desc) + (k === me.die && me.dieUses ? ' — encore ' + me.dieUses : '') + '</small></button>').join('')) +
+          sec('🎒 Objets <small>' + me.items.length + '/3</small>', d.items.length ? d.items.map((it) => '<button class="btn opt ghosty" data-a="' + A({ item: it.i }) + '">' + ico(it.k, GAME.items[it.k].icon) + ' ' + esc(GAME.items[it.k].name) + '<small>' + esc(GAME.items[it.k].desc) + '</small></button>').join('') : '<span class="inv-empty">' + (me.items.length ? 'Déjà utilisé ce tour' : 'Vide') + '</span>') +
+          (S.settings.boosters ? sec('🃏 Cartes <small>' + (me.hand || []).length + '/5</small>', hand.length ? hand.map((h) => { const c = CARDS[h.id]; return '<button class="btn opt cardb ' + c.rarity + '" data-a="' + A({ card: h.i }) + '">' + ico(FXK[c.fx], c.icon) + ' ' + esc(c.name) + '<small>' + esc(c.desc) + '</small></button>'; }).join('') : '<span class="inv-empty">' + ((me.hand || []).length ? 'Déjà jouée ce tour' : 'Aucune carte à jouer') + '</span>') : '') +
           '</div>';
       } else if (pr.kind === 'fork') {
+        $('dice').classList.add('hidden');
         html = '<span class="msg">👆 Embranchement ! Touche une flèche à côté de ton Monstro pour choisir ta direction.</span><div class="opts small-opts">' + d.options.map((o) => '<button class="btn small ghost" data-a="' + A(o.value) + '">' + o.icon + ' ' + esc(o.label) + '</button>').join('') + '</div>';
       } else if (pr.kind === 'buy' || pr.kind === 'nest') {
         html = '<span class="msg">' + esc(d.text) + (pr.kind === 'nest' ? '<br><small>' + esc(GAME.companions[d.k].desc) + (d.replace ? ' (remplace ' + GAME.companions[d.replace].icon + ')' : '') + '</small>' : '') + '</span><div class="opts"><button class="btn big" data-a="true">Oui !</button><button class="btn big ghost" data-a="false">Non</button></div>';
       } else if (pr.kind === 'shop') {
-        html = '<span class="msg">🛒 ' + esc(d.text) + (d.sale ? ' <b>(soldes −50 %)</b>' : '') + '</span><div class="opts">' + d.options.map((o) => { const it = o.k === 'booster' ? GAME.booster : o.k === 'die' ? { icon: GAME.dice[o.d].icon, name: GAME.dice[o.d].label + (me.die ? ' (remplace ' + GAME.dice[me.die].icon + ')' : ''), desc: GAME.dice[o.d].desc + ' — à toi pour le reste de la partie' } : GAME.items[o.k]; return '<button class="btn opt' + (o.k === 'booster' ? ' alt' : '') + '" data-a="' + A(o.k) + '"' + (o.price > me.coins || (d.full && o.k !== 'booster' && o.k !== 'die') ? ' disabled' : '') + '>' + it.icon + ' ' + esc(it.name) + ' · ' + o.price + ' ' + B.coin.icon + '<small>' + esc(it.desc) + '</small></button>'; }).join('') + '<button class="btn ghost" data-a="null">Rien, merci</button></div>';
+        html = '<span class="msg">🛒 ' + esc(d.text) + (d.sale ? ' <b>(soldes −50 %)</b>' : '') + '</span><div class="opts">' + d.options.map((o) => { const it = o.k === 'booster' ? GAME.booster : o.k === 'die' ? { icon: GAME.dice[o.d].icon, name: GAME.dice[o.d].label + (me.die ? ' (remplace ' + GAME.dice[me.die].icon + ')' : ''), desc: GAME.dice[o.d].desc + ' — à toi pour le reste de la partie' } : GAME.items[o.k]; return '<button class="btn opt' + (o.k === 'booster' ? ' alt' : '') + '" data-a="' + A(o.k) + '"' + (o.price > me.coins || (d.full && o.k !== 'booster' && o.k !== 'die') ? ' disabled' : '') + '>' + ico(o.k === 'die' ? o.d : o.k, it.icon) + ' ' + esc(it.name) + ' · ' + o.price + ' ' + B.coin.icon + '<small>' + esc(it.desc) + '</small></button>'; }).join('') + '<button class="btn ghost" data-a="null">Rien, merci</button></div>';
       } else if (pr.kind === 'target') {
         html = '<span class="msg">' + esc(d.text) + '</span><div class="opts">' + d.options.map((id) => { const p = S.players.find((x) => x.id === id); return '<button class="btn opt alt" data-a="' + A(id) + '">' + mini(p.char, 28) + ' ' + esc(p.name) + '<small>' + starIcon() + ' ' + p.stars + ' · ' + coinIcon() + ' ' + p.coins + '</small></button>'; }).join('') + '</div>';
       } else if (pr.kind === 'casino') {
@@ -681,14 +704,62 @@
     while ($('toasts').children.length > 3) $('toasts').firstChild.remove();
     setTimeout(() => d.remove(), 4200);
   }
-  const LAND = { blue: ['Case bleue', '#2f7cf6'], red: ['Case rouge', '#e5383b'], event: ['Case événement', '#9b4dff'], item: ['Case objet', '#06b6d4'], shop: ['Boutique', '#ec4899'], nest: ['Nid à compagnon', '#65a30d'], chance: ['Case Chance', '#f5c518'], chaos: ['Chamboulement !', '#1e293b'], tunnel: ['Passage secret', '#111827'], casino: ['Casino', '#15803d'], trade: ['Case Troc', '#0d9488'], start: ['Départ', '#94a3b8'] };
+  const LAND = { blue: ['Case bleue', '#2f7cf6'], red: ['Case rouge', '#e5383b'], event: ['Case événement', '#9b4dff'], item: ['Case objet', '#06b6d4'], shop: ['Boutique', '#ec4899'], nest: ['Nid à compagnon', '#65a30d'], chance: ['Case Chance', '#f5c518'], chaos: ['Chamboulement !', '#1e293b'], tunnel: ['Passage secret', '#111827'], casino: ['Casino', '#15803d'], trade: ['Case Troc', '#0d9488'], boss: ['Case Boss !', '#7f1d1d'], shift: ['Case Terrain', '#b45309'], start: ['Départ', '#94a3b8'] };
   function landShow(m) {
-    let L = LAND[m.tile]; if (m.tile === 'special') { const B = board(); L = [B.special && B.special.name ? B.special.name : 'Case du boss', '#f59e0b']; }
+    let L = LAND[m.tile]; if (m.tile === 'tunnel') { const B = board(); L = [B.warp.name, '#111827']; } if (m.tile === 'special') { const B = board(); L = [B.special && B.special.name ? B.special.name : 'Case du boss', '#f59e0b']; }
     if (!L) return;
     const d = document.createElement('div'); d.className = 'landb';
     d.innerHTML = '<i style="background:' + L[1] + '"></i><span>' + esc(L[0]) + '</span>';
     const host = document.querySelector('.board-wrap') || document.body; host.appendChild(d);
     setTimeout(() => d.remove(), 1900);
+  }
+  function orderShow(m) {
+    const d = document.createElement('div'); d.className = 'roul';
+    d.innerHTML = '<div class="roul-in"><h2>' + esc(m.title) + '</h2><div class="olist">' + m.order.map((o, i) => { const q = S.players.find((x) => x.id === o.pid); return q ? '<div class="orow" style="animation-delay:' + (i * 0.35) + 's"><b>' + (i + 1) + '</b>' + mini(q.char, 34) + '<span>' + esc(q.name) + '</span>' + (o.n != null ? '<i>🎲 ' + o.n + '</i>' : '') + '</div>' : ''; }).join('') + '</div></div>';
+    document.body.appendChild(d); sfx.item();
+    setTimeout(() => d.remove(), 3600);
+  }
+  // Détail d'une case au survol (PC) ou en la touchant (téléphone)
+  function tileInfo(n, B) {
+    const C = B.coin.name, me = S && S.players.find((p) => p.id === ME);
+    const I = {
+      start: ['Départ', 'Tout le monde commence ici.'],
+      blue: ['Case bleue', '+3 ' + C + ' (×2 pendant les 3 derniers tours). Famille Jurassique : +1 ou +2 en plus.'],
+      red: ['Case rouge', '−3 ' + C + ' (×2 pendant les 3 derniers tours). Famille Mine : tu perds 1 ou 2 de moins.'],
+      event: ['Case événement', 'Un événement au hasard : coffre de 10 ' + C + ', aimant (3 ' + C + ' de chaque joueur), échange de ' + C + ', tornade qui déplace l’étoile, bonne fée pour le plus pauvre, machine à sous, objet rare ou portail qui échange deux places.'],
+      item: ['Case objet', 'Un objet gratuit, ou parfois un booster de 3 cartes.'],
+      shop: ['Boutique', 'Tu peux acheter des objets, un booster ou un dé en passant dessus, même sans t’arrêter.'],
+      nest: ['Nid à compagnon', 'Adopte le compagnon du nid pour 5 ' + C + '.'],
+      chance: ['Case Chance', 'Deux joueurs tirés au sort : l’un donne à l’autre des ' + C + ' ou, à partir du tour 3, une étoile.'],
+      chaos: ['Chamboulement', 'Remet tout en jeu : partage des ' + C + ', positions mélangées, Robin des bois, tas de ' + C + ' mélangés ou étoiles qui s’envolent.'],
+      special: [B.special.name, B.special.desc],
+      tunnel: [B.warp ? B.warp.name : 'Passage secret', (B.warp ? B.warp.icon + ' ' : '') + 'Transport : il t’emmène directement vers une autre case du plateau.'],
+      casino: ['Casino', S && S.settings.gambling ? 'Machine à sous, roulette ou pile ou face : mise 5, 10 ou 20 ' + C + '.' : 'Jeux d’argent désactivés : rien ne se passe.'],
+      trade: ['Case Troc', S && S.settings.boosters ? 'Propose à un joueur d’échanger une de tes cartes de famille contre une des siennes.' : 'Boosters désactivés : +3 ' + C + '.'],
+      shift: ['Case Terrain', 'Le terrain bouge ! Un chemin se ferme pendant 2 tours (dino endormi, marée, travaux ou éboulement)… ou, s’il y en a déjà un de fermé, il se rouvre.'],
+      boss: ['Case Boss', WORLD.bosses[B.id].name + ' débarque et fait tourner sa roue : −10, −20, impôt pour tous, retour au départ, objets confisqués, parfois une étoile… ou +5 s’il est de bonne humeur.'],
+    };
+    const info = n.sand ? ['Banc de sable', (I[n.t] ? I[n.t][0] + ' — ' : '') + 'On ne peut y aller qu’à marée basse (2 tours sur 4).'] : (I[n.t] || ['Case', '']);
+    const star = S && (S.stars || []).find((x) => x.node === n.id);
+    let extra = '';
+    if (star && me) extra = '<p class="tt-star">' + starIcon() + ' Étoile ici : ' + Math.round(star.price * (S.settings.market && S.market ? S.market.star : 1)) + ' ' + C + '</p>';
+    const bl = S && (S.blocks || []).find((b) => b.from === n.id);
+    if (bl) extra += '<p class="tt-block">' + bl.icon + ' Un chemin est bloqué ici (' + bl.left + ' tour' + (bl.left > 1 ? 's' : '') + ')</p>';
+    if (n.next && n.next.length > 1) extra += '<p class="muted">Embranchement : tu choisis ta direction.</p>';
+    return '<b>' + esc(info[0]) + '</b><p>' + esc(info[1]) + '</p>' + extra;
+  }
+  let tipTimer = null;
+  function tileTip(id, x, y, tap) {
+    let tip = $('tileTip'); if (!tip) { tip = document.createElement('div'); tip.id = 'tileTip'; tip.className = 'tile-tip hidden'; document.body.appendChild(tip); }
+    clearTimeout(tipTimer);
+    if (id == null || !S || S.phase !== 'board') { tip.classList.add('hidden'); return; }
+    const B = board(), n = B.nodes[id]; if (!n) return;
+    tip.innerHTML = tileInfo(n, B);
+    tip.classList.remove('hidden');
+    const w = Math.min(300, window.innerWidth - 20);
+    tip.style.left = Math.max(10, Math.min(window.innerWidth - w - 10, x + 14)) + 'px';
+    tip.style.top = Math.max(10, Math.min(window.innerHeight - 160, y + 14)) + 'px';
+    if (tap) tipTimer = setTimeout(() => tip.classList.add('hidden'), 4000);
   }
   function banner(text) {
     const d = document.createElement('div'); d.className = 'banner'; d.innerHTML = '<div>' + esc(text) + '</div>';
@@ -714,7 +785,7 @@
   function cardHtml(id, back) {
     const c = CARDS[id], r = RARITY[c.rarity];
     if (back) return '<div class="tcard back"><div class="tc-in">🃏</div></div>';
-    const art = c.char ? mini(c.char, 64) : '<span class="tc-ic">' + c.icon + '</span>';
+    const art = c.char ? mini(c.char, 64) : (c.fx && ICO()[FXK[c.fx]] ? ico(FXK[c.fx], c.icon, 64) : '<span class="tc-ic">' + c.icon + '</span>');
     return '<div class="tcard ' + c.rarity + '" style="--rc:' + r.color + '"><div class="tc-r">' + r.name + '</div><div class="tc-art">' + art + '</div><b>' + esc(c.name) + '</b><small>' + esc(c.fx ? c.desc : c.fam ? FAMILIES[c.fam].icon + ' ' + FAMILIES[c.fam].name : 'Collection') + '</small></div>';
   }
   function boosterShow(m) {
@@ -841,7 +912,7 @@
 
   function renderMinigame() {
     const mg = S.mg; if (!mg) return;
-    OV.classList.remove('hidden');
+    OV.classList.remove('hidden'); $('dice').classList.add('hidden');
     const key = mg.id + ':' + mg.phase;
     const changed = !MG || MG.key !== key;
     if (changed) {
@@ -933,7 +1004,7 @@
         el.innerHTML = S.players.map((p) => '<div class="lane"><span class="ln">' + esc(p.name) + '</span><span class="cake">🎂</span>' + svg(p.char).replace('<svg', '<svg style="left:' + Math.min(88, (counts[p.id] || 0) / max * 88) + '%"') + '</div>').join('');
       }
     },
-    chrono(mg, changed) { blindTimer(mg, changed, 7000, 'Objectif : 7,00 s'); },
+    chrono(mg, changed) { blindTimer(mg, changed, mg.target || 7000, 'Objectif : ' + ((mg.target || 7000) / 1000).toFixed(2).replace('.', ',') + ' s'); },
     synchro(mg, changed) { blindTimer(mg, changed, 5000, 'Tous ensemble : 5,00 s'); },
     compte(mg, changed) {
       if (!changed) return;
@@ -1031,10 +1102,13 @@
     },
     portes(mg, changed) {
       const solo = mg.solo === ME;
-      if (mg.phase === 'pick') {
+      if (mg.phase === 'pick' || mg.phase === 'pick2') {
+        if (changed) { MG.drawn = false; MG.door = null; MG.sel = []; MG.locked = false; }
+        const out = !solo && !(mg.alive || []).includes(ME);
+        if (out) { if (changed) OV.innerHTML = '<div class="mg"><h1 style="font-size:28px">🚪 Tu as été attrapé !</h1><p class="rules">Le Gardien a une chance de plus. Regarde si les autres s’en sortent…</p></div>'; return; }
         if (!changed && MG.drawn) { const st = $('pst'); if (st && !MG.door && !solo) st.textContent = (mg.picked || []).length + ' joueur(s) ont choisi'; return; }
         MG.drawn = true; MG.sel = MG.sel || [];
-        OV.innerHTML = '<div class="mg"><h1 style="font-size:28px">🚪 ' + (solo ? 'Tu es le Gardien : verrouille 2 portes' : 'Choisis une porte… sans te faire attraper') + '</h1><div class="doors">' + [0, 1, 2, 3, 4].map((i) => '<div class="door" data-i="' + i + '">🚪<small>' + (i + 1) + '</small></div>').join('') + '</div>' + (solo ? '<button class="btn big" id="lock" disabled>Verrouiller</button>' : '') + '<p class="muted" id="pst"></p></div>';
+        OV.innerHTML = '<div class="mg"><h1 style="font-size:28px">🚪 ' + (mg.phase === 'pick2' ? '2e chance du Gardien ! ' : '') + (solo ? 'Tu es le Gardien : verrouille 2 portes' : 'Choisis une porte… sans te faire attraper') + '</h1><div class="doors">' + [0, 1, 2, 3, 4].map((i) => '<div class="door" data-i="' + i + '">🚪<small>' + (i + 1) + '</small></div>').join('') + '</div>' + (solo ? '<button class="btn big" id="lock" disabled>Verrouiller</button>' : '') + '<p class="muted" id="pst"></p></div>';
         OV.querySelectorAll('.door').forEach((d) => (d.onclick = () => {
           const i = +d.dataset.i;
           if (solo) {
@@ -1045,8 +1119,8 @@
           } else if (MG.door == null) { MG.door = i; d.classList.add('mine'); send({ t: 'mg', data: { door: i } }); $('pst').textContent = 'Porte ' + (i + 1) + ' choisie…'; sfx.tap(); }
         }));
         const lk = $('lock'); if (lk) lk.onclick = () => { MG.locked = true; send({ t: 'mg', data: { locks: MG.sel } }); lk.disabled = true; lk.textContent = 'Verrouillé 🔒'; sfx.tap(); };
-      } else if (mg.phase === 'reveal' && changed) {
-        OV.innerHTML = '<div class="mg"><h1 style="font-size:30px">🚪 Ouverture !</h1><div class="doors">' + [0, 1, 2, 3, 4].map((i) => '<div class="door ' + (mg.locks.includes(i) ? 'locked' : 'open') + '">' + (mg.locks.includes(i) ? '🔒' : '🚪') + '<div class="who">' + Object.keys(mg.picks).filter((pid) => mg.picks[pid] === i).map((pid) => mini(pl(pid).char, 30)).join('') + '</div></div>').join('') + '</div><p class="verdict">' + mg.caught.length + ' attrapé(s) !</p></div>';
+      } else if ((mg.phase === 'reveal' || mg.phase === 'reveal2') && changed) {
+        OV.innerHTML = '<div class="mg"><h1 style="font-size:30px">🚪 Ouverture !</h1><div class="doors">' + [0, 1, 2, 3, 4].map((i) => '<div class="door ' + (mg.locks.includes(i) ? 'locked' : 'open') + '">' + (mg.locks.includes(i) ? '🔒' : '🚪') + '<div class="who">' + Object.keys(mg.picks).filter((pid) => mg.picks[pid] === i).map((pid) => mini(pl(pid).char, 30)).join('') + '</div></div>').join('') + '</div><p class="verdict">' + mg.caught.length + ' attrapé(s) !' + (mg.bonus ? ' Le Gardien a une 2e chance…' : '') + '</p></div>';
       }
     },
     coffrefort(mg, changed) {
@@ -1060,6 +1134,8 @@
     },
     kart(mg, changed) { if (mg.phase === 'race') kartGame(mg, changed); },
     rink(mg, changed) { if (mg.phase === 'rink') rinkGame(mg, changed); },
+    tir(mg, changed) { if (mg.phase === 'pop') popGame(mg, changed); },
+    taupes(mg, changed) { if (mg.phase === 'pop') popGame(mg, changed); },
   };
 
   function blindTimer(mg, changed, target, title) {
@@ -1081,6 +1157,49 @@
       clk.textContent = (ms / 1000).toFixed(2).replace('.', ',');
       $('stop').disabled = true; $('res').textContent = 'Écart : ' + (Math.abs(ms - target) / 1000).toFixed(2).replace('.', ',') + ' s';
     };
+  }
+
+  /* ---------- Stand de tir / Tape-taupes (3D) ---------- */
+  function popGame(mg, changed) {
+    if (!changed) return;
+    const kind = mg.kind, DUR = mg.dur, t0 = performance.now(), mine = new Set();
+    OV.innerHTML = '<div class="kart-wrap rink-wrap pop-wrap ' + kind + '"><div class="ktitle">' + (kind === 'tir' ? '🎯 Stand de tir' : '🔨 Tape-taupes') + '</div><div class="khud"><span id="ppS">0 pt</span><span id="ppP"></span><span id="ppT">0:30</span></div><canvas id="ppc"></canvas><p class="muted rkhelp">' + (kind === 'tir' ? 'Clique ou touche les cibles. Évite les bombes !' : 'Tape les taupes. Pas la Reine !') + '</p></div>';
+    const cv = $('ppc');
+    let R3 = null;
+    if (USE3D && window.Scene3D && window.Scene3D.pop) { try { R3 = window.Scene3D.pop(cv, kind); } catch (e) { R3 = null; } }
+    const g2 = R3 ? null : cv.getContext('2d');
+    const live = () => (S.mg && S.mg.phase === 'pop' ? S.mg : mg);
+    const colorOf = (pid) => { if (pid === 'me') pid = ME; const p = S.players.find((q) => q.id === pid); return p ? p.color : '#fff'; };
+    const pos2d = (x, el, W, H) => { if (kind === 'tir') { const u = el - x.t0; return [W / 2 + (-x.dir * 8 + x.dir * x.sp * u / 1000) * W / 18, H * (0.25 + (2 - x.row) * 0.25), Math.min(W, H) * 0.06]; } return [W * (0.25 + (x.hole % 3) * 0.25), H * (0.25 + Math.floor(x.hole / 3) * 0.25), Math.min(W, H) * 0.07]; };
+    cv.addEventListener('pointerdown', (e) => {
+      const el = performance.now() - t0; if (el > DUR) return;
+      let id = null;
+      if (R3) id = R3.pick(e.clientX, e.clientY);
+      else { const r = cv.getBoundingClientRect(), x0 = e.clientX - r.left, y0 = e.clientY - r.top; (live().targets || []).forEach((x) => { if (el < x.t0 || el > x.t0 + x.life || mine.has(x.id)) return; const [px, py, rad] = pos2d(x, el, r.width, r.height); if (Math.hypot(px - x0, py - y0) < rad * 1.3) id = x.id; }); }
+      if (id == null) { sfx.tap(); return; }
+      const x = (live().targets || []).find((q) => q.id === id);
+      if (!x || mine.has(id)) return;
+      mine.add(id); send({ t: 'mg', data: { hit: id } });
+      if (x.k === 'bomb') sfx.bad(); else if (x.k === 'gold') sfx.star(); else sfx.coin();
+    });
+    let running = true;
+    const loop = (now) => {
+      if (!running || !document.body.contains(cv)) { stop(); return; }
+      const el = now - t0, L = live();
+      if (R3) R3.frame(now, { el, targets: L.targets, hits: {}, mine, colorOf });
+      else {
+        const W = cv.clientWidth, H = cv.clientHeight; if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+        g2.fillStyle = kind === 'tir' ? '#4c1d95' : '#65a30d'; g2.fillRect(0, 0, W, H);
+        (L.targets || []).forEach((x) => { if (el < x.t0 || el > x.t0 + x.life || mine.has(x.id)) return; const [px, py, rad] = pos2d(x, el, W, H); g2.fillStyle = x.k === 'gold' ? '#facc15' : x.k === 'bomb' ? '#111827' : '#ef4444'; g2.beginPath(); g2.arc(px, py, rad, 0, 7); g2.fill(); });
+      }
+      const sco = L.scores || {}, rank = S.players.slice().sort((a, b) => (sco[b.id] || 0) - (sco[a.id] || 0));
+      const a1 = $('ppS'); if (a1) { a1.textContent = (sco[ME] || 0) + ' pt'; $('ppP').textContent = (rank.findIndex((p) => p.id === ME) + 1) + 'e / ' + rank.length; const tl = Math.max(0, Math.ceil((DUR - el) / 1000)); $('ppT').textContent = '0:' + String(tl).padStart(2, '0'); }
+      requestAnimationFrame(loop);
+    };
+    let stopped = false;
+    function stop() { if (stopped) return; stopped = true; running = false; if (R3) R3.dispose(); }
+    MG.cleanup = stop;
+    requestAnimationFrame(loop);
   }
 
   /* ---------- Patinoire Givrée (3D) ---------- */
@@ -1122,6 +1241,7 @@
       if (r > R - 0.6) { const nx = K.x / r, nz = K.z / r, d = K.vx * nx + K.vz * nz; if (d > 0) { K.vx -= 1.6 * d * nx; K.vz -= 1.6 * d * nz; if (d > 2) sfx.tap(); } K.x = nx * (R - 0.6); K.z = nz * (R - 0.6); }
       r = Math.hypot(K.x, K.z);
       if (r < IN) { const nx = K.x / (r || 1), nz = K.z / (r || 1), d = K.vx * nx + K.vz * nz; if (d < 0) { K.vx -= 1.6 * d * nx; K.vz -= 1.6 * d * nz; } K.x = nx * IN; K.z = nz * IN; }
+      Object.values(MG.others).forEach((o) => { const dx = K.x - o.x, dz = K.z - o.z, d = Math.hypot(dx, dz); if (d < 1.15 && d > 0.01) { const nx = dx / d, nz = dz / d; K.x += nx * (1.15 - d); K.z += nz * (1.15 - d); const vn = K.vx * nx + K.vz * nz; if (vn < 0) { K.vx -= 1.8 * vn * nx; K.vz -= 1.8 * vn * nz; } K.vx += nx * 1.5; K.vz += nz * 1.5; if (!K.bumpT || now - K.bumpT > 350) { K.bumpT = now; sfx.tap(); } } }); // chocs entre patineurs
       if (sp > 0.3) K.a = Math.atan2(K.vx, K.vz);
       const live = (S.mg && S.mg.phase === 'rink' ? S.mg : mg);
       const gems = live.gems || [];
@@ -1192,6 +1312,7 @@
         K.a += steer * (tr.ice ? 2.1 : 2.9) * dt * Math.min(1, K.v / 120);
         K.x += Math.cos(K.a) * K.v * dt; K.y += Math.sin(K.a) * K.v * dt;
         K.x = Math.max(20, Math.min(980, K.x)); K.y = Math.max(20, Math.min(680, K.y));
+        Object.values(MG.others).forEach((o) => { const dx = K.x - o.x, dy = K.y - o.y, d = Math.hypot(dx, dy); if (d < 30 && d > 0.01) { K.x += dx / d * (30 - d); K.y += dy / d * (30 - d); K.v *= 0.55; if (!K.bumpT || now - K.bumpT > 400) { K.bumpT = now; sfx.tap(); } } }); // choc entre karts
         let dIdx = ni - K.idx; if (dIdx < -N / 2) dIdx += N; if (dIdx > N / 2) dIdx -= N;
         if (Math.abs(dIdx) < 15) { K.prog += dIdx; K.idx = ni; }
         if (K.prog >= N * tr.laps) { K.done = true; const ms = Math.round(now - K.t0); send({ t: 'mg', data: { prog: K.prog, fin: ms } }); sfx.star(); }
@@ -1201,8 +1322,9 @@
       const cw = Math.max(240, Math.min(wrap.width, (window.innerHeight - 170) / 0.7));
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       if (kc.width !== Math.round(cw * dpr)) { kc.width = Math.round(cw * dpr); kc.height = Math.round(cw * 0.7 * dpr); kc.style.width = cw + 'px'; kc.style.height = cw * 0.7 + 'px'; }
-      const s = kc.width / 1000;
-      kg.setTransform(s, 0, 0, s, 0, 0);
+      const s = kc.width / 1000, Z = 2.1; // caméra qui suit le kart
+      const camX = Math.max(500 / Z, Math.min(1000 - 500 / Z, K.x)), camY = Math.max(350 / Z, Math.min(700 - 350 / Z, K.y));
+      kg.setTransform(s * Z, 0, 0, s * Z, s * (500 - camX * Z), s * (350 - camY * Z));
       const gg = kg.createRadialGradient(400, 250, 50, 500, 350, 700); gg.addColorStop(0, shadeC(tr.ground || '#4d7c0f', 0.15)); gg.addColorStop(1, shadeC(tr.ground || '#4d7c0f', -0.3));
       kg.fillStyle = gg; kg.fillRect(0, 0, 1000, 700);
       kg.lineJoin = 'round'; kg.lineCap = 'round';
@@ -1234,6 +1356,13 @@
       });
       const meP = S.players.find((p) => p.id === ME);
       if (meP && live[ME] !== undefined) drawKart(K.x, K.y, K.a, meP, true);
+      // Mini-carte
+      { const ms = s * 0.2, ox = kc.width - 1000 * ms - 10 * s, oy = 10 * s;
+        kg.setTransform(1, 0, 0, 1, 0, 0); kg.fillStyle = 'rgba(15,10,40,.7)'; kg.beginPath(); if (kg.roundRect) kg.roundRect(ox - 6 * s, oy - 6 * s, 1000 * ms + 12 * s, 700 * ms + 12 * s, 10 * s); else kg.rect(ox - 6 * s, oy - 6 * s, 1000 * ms + 12 * s, 700 * ms + 12 * s); kg.fill();
+        kg.setTransform(ms, 0, 0, ms, ox, oy); kg.lineJoin = 'round';
+        kg.beginPath(); tr.pts.forEach((p, i) => (i ? kg.lineTo(p[0], p[1]) : kg.moveTo(p[0], p[1]))); kg.closePath(); kg.strokeStyle = '#e2e8f0'; kg.lineWidth = tr.w * 0.6; kg.stroke();
+        S.players.forEach((p) => { const o = p.id === ME ? K : MG.others[p.id]; if (!o) return; kg.fillStyle = p.color; kg.beginPath(); kg.arc(o.x, o.y, p.id === ME ? 34 : 24, 0, 7); kg.fill(); if (p.id === ME) { kg.lineWidth = 10; kg.strokeStyle = '#fff'; kg.stroke(); } });
+        kg.setTransform(s, 0, 0, s, 0, 0); }
       const lap = Math.min(tr.laps, Math.floor(Math.max(0, K.prog) / N) + 1);
       const order = S.players.map((p) => ({ id: p.id, pr: p.id === ME ? (K.done ? 1e9 : K.prog) : (live[p.id] ? (live[p.id].fin ? 1e9 - live[p.id].fin / 1e3 : live[p.id].prog) : 0) })).sort((a, b) => b.pr - a.pr);
       const el = Math.floor((now - K.t0) / 1000);
@@ -1284,9 +1413,9 @@
     const me = S && S.players.find((p) => p.id === ME); if (!me) return;
     const box = document.createElement('div'); box.className = 'help';
     const row = (ic, name, desc, cls) => '<div class="bagrow ' + (cls || '') + '"><span class="hi">' + ic + '</span><div><b>' + esc(name) + '</b><br><small>' + esc(desc) + '</small></div></div>';
-    const dice = ['classique'].concat(me.die ? [me.die] : []).map((k) => row(GAME.dice[k].icon, GAME.dice[k].label, GAME.dice[k].desc + (k === me.die && me.dieUses ? ' (encore ' + me.dieUses + ')' : ''))).join('');
-    const items = me.items.length ? me.items.map((k) => row(GAME.items[k].icon, GAME.items[k].name, GAME.items[k].desc)).join('') : '<p class="muted">Aucun objet. La boutique 🛒 et les cases 🎁 en donnent.</p>';
-    const hand = (me.hand || []).length ? me.hand.map((id) => { const c = CARDS[id]; return row(c.icon, c.name + ' (' + RARITY[c.rarity].name + ')', c.desc, 'r-' + c.rarity); }).join('') : '<p class="muted">Aucune carte à jouer. Les cartes rares, épiques et légendaires des boosters arrivent ici.</p>';
+    const dice = ['classique'].concat(me.die ? [me.die] : []).map((k) => row(ico(k, GAME.dice[k].icon, 34), GAME.dice[k].label, GAME.dice[k].desc + (k === me.die && me.dieUses ? ' (encore ' + me.dieUses + ')' : ''))).join('');
+    const items = me.items.length ? me.items.map((k) => row(ico(k, GAME.items[k].icon, 34), GAME.items[k].name, GAME.items[k].desc)).join('') : '<p class="muted">Aucun objet. La boutique 🛒 et les cases 🎁 en donnent.</p>';
+    const hand = (me.hand || []).length ? me.hand.map((id) => { const c = CARDS[id]; return row(ico(FXK[c.fx], c.icon, 34), c.name + ' (' + RARITY[c.rarity].name + ')', c.desc, 'r-' + c.rarity); }).join('') : '<p class="muted">Aucune carte à jouer. Les cartes rares, épiques et légendaires des boosters arrivent ici.</p>';
     const fams = Object.entries(FAMILIES).map(([f, F]) => { const n = F.cards.filter((id) => me.cards.includes(id)).length, l = famLevel(me.cards, f); return row(F.icon, F.name + ' : ' + n + '/5', l ? 'Actif : ' + F.bonus[l - 1] : '3 cartes pour : ' + F.bonus[0], l ? 'on' : ''); }).join('');
     const extra = [me.companion ? row(GAME.companions[me.companion].icon, GAME.companions[me.companion].name + ' (compagnon)', GAME.companions[me.companion].desc) : '', me.power ? row(GAME.powers[me.power].icon, GAME.powers[me.power].name + ' (pouvoir)', GAME.powers[me.power].desc) : '', me.shield ? row('🛡️', 'Bouclier actif', 'Annule ta prochaine perte.') : '', me.buff ? row(me.buff < 0 ? '🐌' : '👟', 'Prochain lancer ' + (me.buff > 0 ? '+' : '') + me.buff, 'S’ajoute à ton prochain dé.') : ''].join('');
     box.innerHTML = '<div class="help-in bag"><button class="btn small ghost hx">Fermer ✕</button><h1>🎒 Mon sac</h1><p class="muted">À ton tour, tu peux utiliser 1 objet et 1 carte avant de lancer ton dé. Tout est remis à zéro à la fin de la partie.</p>' +
