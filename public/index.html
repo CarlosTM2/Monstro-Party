@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Monstro Party</title>
+<meta name="theme-color" content="#1e1240">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- Accueil -->
+  <section id="home" class="screen">
+    <div class="home-wrap">
+      <div class="logo"><span>MONSTRO</span><b>PARTY</b></div>
+      <p class="tagline">La Grande Fête des Étoiles de Monstralia</p>
+      <div class="card">
+        <label class="lbl" for="name">Ton pseudo</label>
+        <input id="name" maxlength="16" placeholder="Ton pseudo" autocomplete="off">
+        <div class="lbl">Ton Monstro</div>
+        <div id="charGrid" class="char-grid"></div>
+        <div id="charLore" class="lore"></div>
+        <div class="home-actions">
+          <button id="btnCreate" class="btn big">Créer une partie</button>
+          <div class="join-row">
+            <input id="code" maxlength="4" placeholder="CODE" autocomplete="off">
+            <button id="btnJoin" class="btn big alt">Rejoindre</button>
+          </div>
+        </div>
+        <p id="homeErr" class="err"></p>
+        <p style="text-align:center;margin:6px 0 0"><button class="btn small ghost btnHelp">📖 Comment jouer</button></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Salle d'attente -->
+  <section id="lobby" class="screen hidden">
+    <div class="lobby-wrap">
+      <div class="code-box">
+        <div class="lbl">Code de la partie</div>
+        <div id="lobbyCode" class="big-code">----</div>
+        <button id="btnCopy" class="btn small">Copier le lien d’invitation</button>
+      </div>
+      <div class="card">
+        <h2>Joueurs <span id="pCount"></span></h2>
+        <div id="lobbyPlayers" class="lobby-players"></div>
+        <div id="hostTools" class="host-tools">
+          <button id="btnBot" class="btn small alt">+ Ajouter un robot</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Ton Monstro</h2>
+        <div id="lobbyChars" class="char-grid small"></div>
+      </div>
+      <div class="card">
+        <h2>Plateau</h2>
+        <div id="boardChoice" class="board-choice"></div>
+        <div class="set-grid">
+          <div class="set"><span>Taille</span><div id="sizeChoice" class="seg"></div></div>
+          <div class="set"><span>Étages</span><div id="floorChoice" class="seg"></div></div>
+          <div class="set"><span>Tours</span><div id="turnsChoice" class="seg"></div></div>
+        </div>
+        <p id="boardInfo" class="muted small-info"></p>
+      </div>
+      <div class="card">
+        <h2>Règles de la partie</h2>
+        <div class="set-grid">
+          <div class="set"><span>Pouvoirs spéciaux</span><div id="powersChoice" class="seg"></div></div>
+          <div class="set"><span>Événements aléatoires</span><div id="eventsChoice" class="seg"></div></div>
+          <div class="set"><span>Étoiles bonus à la fin</span><div id="bonusChoice" class="seg"></div></div>
+          <div class="set"><span>Jeux d’argent (casino, paris)</span><div id="gamblingChoice" class="seg"></div></div>
+          <div class="set"><span>Boosters de cartes</span><div id="boosterChoice" class="seg"></div></div>
+        </div>
+        <div id="powerPick" class="hidden"><div class="lbl">Ton pouvoir</div><div id="powerGrid" class="power-grid"></div></div>
+      </div>
+      <div class="lobby-foot">
+        <span><button id="btnLeave" class="btn small ghost">Quitter</button> <button class="btn small ghost btnHelp">📖 Règles</button></span>
+        <button id="btnStart" class="btn big">Lancer la partie !</button>
+        <p id="waitHost" class="muted">En attente de l’hôte…</p>
+      </div>
+      <p id="lobbyErr" class="err"></p>
+    </div>
+  </section>
+
+  <!-- Partie -->
+  <section id="game" class="screen hidden">
+    <header class="gbar">
+      <div id="gTitle" class="gtitle"></div>
+      <div class="gright"><button id="btnAlbum" class="btn small ghost hidden">🃏</button><button id="btnCam" class="btn small ghost hidden">🗺️ Vue d’ensemble</button><button class="btn small ghost btnHelp">📖</button><div id="gTurn" class="gturn"></div></div>
+    </header>
+    <div class="gmain">
+      <div class="board-wrap"><canvas id="board"></canvas><div id="fxLayer"></div></div>
+      <aside id="side" class="side"></aside>
+    </div>
+    <div id="actionBar" class="action-bar"></div>
+    <div id="toasts" class="toasts"></div>
+  </section>
+
+  <!-- Mini-jeu / résultats / fin -->
+  <div id="overlay" class="overlay hidden"></div>
+  <div id="dice" class="dice hidden"></div>
+  <div id="conn" class="conn hidden">Connexion…</div>
+</div>
+<script src="/boards.js"></script>
+<script src="/client.js"></script>
+</body>
+</html>

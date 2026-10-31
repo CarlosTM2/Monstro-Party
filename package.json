@@ -1,0 +1,10 @@
+{
+  "name": "monstro-party",
+  "version": "0.1.0",
+  "description": "Monstro Party : jeu de plateau et de mini-jeux en ligne entre amis",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" },
+  "license": "UNLICENSED",
+  "private": true
+}
