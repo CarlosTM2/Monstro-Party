@@ -134,8 +134,6 @@
     renderCharGrid($('lobbyChars'), me.char, S.players.filter((p) => p.id !== ME).map((p) => p.char), (id) => { store.set('mp_char', id); send({ t: 'char', char: id }); });
     $('boardChoice').innerHTML = Object.values(THEMES).map((b) => '<div class="bc' + (st.theme === b.id ? ' sel' : '') + (H ? '' : ' ro') + '" data-b="' + b.id + '" style="background:linear-gradient(135deg,' + b.bg[0] + ',' + b.bg[1] + ')"><div class="be">' + b.emoji + '</div><b>' + esc(b.name) + '</b><p>' + esc(b.desc) + '</p><p class="bmeta">Boss : ' + esc(WORLD.bosses[b.id].name) + '<br>Monnaie : ' + b.coin.icon + ' ' + esc(b.coin.name) + ' · Étoile : ' + b.star.icon + ' ' + esc(b.star.name) + '</p></div>').join('');
     if (H) $('boardChoice').querySelectorAll('.bc').forEach((d) => (d.onclick = () => send({ t: 'settings', theme: d.dataset.b })));
-    seg($('sizeChoice'), [['small', 'Petit'], ['medium', 'Moyen'], ['large', 'Grand']], st.size, H, (v) => send({ t: 'settings', size: v }));
-    seg($('floorChoice'), [[false, 'Sans étage'], [true, 'Avec étage']], st.floors, H && st.size !== 'small', (v) => send({ t: 'settings', floors: v }));
     seg($('turnsChoice'), [[5, '5'], [10, '10'], [15, '15'], [20, '20'], [25, '25']], st.turns, H, (v) => send({ t: 'settings', turns: v }));
     seg($('powersChoice'), [['off', 'Désactivés'], ['choice', 'Au choix'], ['random', 'Aléatoires']], st.powers, H, (v) => send({ t: 'settings', powers: v }));
     seg($('eventsChoice'), [[true, 'Oui'], [false, 'Non']], st.events, H, (v) => send({ t: 'settings', events: v }));
@@ -259,7 +257,7 @@
   function animTeleport(pid, to, fly, ride) {
     if (!S) return;
     const from = disp[pid] ? Object.assign({}, disp[pid]) : nodePos(to);
-    if (ride) { anims[pid] = { kind: 'fly', from, to: nodePos(to), t0: performance.now(), dur: 2400, fly: ride === 'ptero' || ride === 'heli' || ride === 'bat', ride }; const p0 = S.players.find((p) => p.id === pid); if (p0) p0.pos = to; sfx.item(); return; }
+    if (ride) { anims[pid] = { kind: 'fly', from, to: nodePos(to), t0: performance.now(), dur: 2400, fly: ride === 'ptero' || ride === 'heli' || ride === 'bat' || ride === 'rocket', ride }; const p0 = S.players.find((p) => p.id === pid); if (p0) p0.pos = to; sfx.item(); return; }
     anims[pid] = { kind: 'fly', from, to: nodePos(to), t0: performance.now(), dur: fly ? 900 : 600, fly };
     const p0 = S.players.find((p) => p.id === pid); if (p0) p0.pos = to;
     if (!fly) { fxs.push({ kind: 'ring', x: from.x, y: from.y, z: from.z, t0: performance.now() }); if (USE3D) Scene3D.fx('ring', from); }
@@ -608,7 +606,7 @@
     $('gTurn').textContent = S.phase === 'end' ? 'Fin !' : 'Tour ' + Math.max(1, S.turn) + ' / ' + S.settings.turns;
     let tp = $('turnPill'); if (!tp) { tp = document.createElement('div'); tp.id = 'turnPill'; tp.className = 'turn-pill'; document.querySelector('.board-wrap').appendChild(tp); }
     const DPI = { jour: '☀️', 'crépuscule': '🌇', nuit: '🌙', aube: '🌅' };
-    tp.innerHTML = S.phase === 'end' ? 'Fin !' : 'Tour<b>' + Math.max(1, S.turn) + '/' + S.settings.turns + '</b>' + (S.settings.theme !== 'mine' ? '<span class="dp" title="' + window.PARTY.dayPhase(S.turn, S.settings.theme) + '">' + DPI[window.PARTY.dayPhase(S.turn, S.settings.theme)] + '</span>' : '');
+    tp.innerHTML = S.phase === 'end' ? 'Fin !' : 'Tour<b>' + Math.max(1, S.turn) + '/' + S.settings.turns + '</b>' + (S.settings.theme !== 'mine' && S.settings.theme !== 'espace' ? '<span class="dp" title="' + window.PARTY.dayPhase(S.turn, S.settings.theme) + '">' + DPI[window.PARTY.dayPhase(S.turn, S.settings.theme)] + '</span>' : '');
     let ob = $('orderBar'); if (!ob) { ob = document.createElement('div'); ob.id = 'orderBar'; ob.className = 'order-bar'; document.querySelector('.board-wrap').appendChild(ob); }
     ob.innerHTML = '<small>Ordre</small>' + S.players.map((p, i) => '<span class="ob' + (p.id === S.current ? ' cur' : '') + '" style="border-color:' + p.color + '" title="' + esc(p.name) + '">' + mini(p.char, 26) + '<i>' + (i + 1) + '</i></span>').join('');
     if (S.settings.market && S.market) {

@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { attach } = require('./ws');
-const { THEMES, makeBoard, CHARACTERS, COLORS, WORLD, GAME, CARDS, RARITY, FAMILIES, famLevel, dayPhase, levisOpen, NPCS, NPC_WHEN } = require('./public/boards.js');
+const { THEMES, makeBoard, CHARACTERS, COLORS, WORLD, GAME, CARDS, RARITY, FAMILIES, famLevel, dayPhase, levisOpen, whenOpenAt, NPCS, NPC_WHEN } = require('./public/boards.js');
 const MINIGAMES = require('./minigames.js');
 
 const PORT = process.env.PORT || 3000;
@@ -49,7 +49,7 @@ class Room {
     this.code = code;
     this.players = [];
     this.phase = 'lobby'; // lobby | board | minigame | end
-    this.settings = { theme: 'jurassic', size: 'medium', floors: false, turns: 10, powers: 'off', events: true, bonus: true, gambling: true, boosters: true, bots: 'normal', teams: false, market: true, mgSolo: false };
+    this.settings = { theme: 'jurassic', size: 'large', floors: true, turns: 10, powers: 'off', events: true, bonus: true, gambling: true, boosters: true, bots: 'normal', teams: false, market: true, mgSolo: false };
     this.reset();
     this.alive = true;
     this.waiters = new Map();
@@ -232,6 +232,7 @@ class Room {
         if (this.turn > 1 && (this.turn - 1) % (+process.env.ORDER_EVERY || 6) === 0) await this.reorder('Tour ' + this.turn + ' : nouvel ordre de passage !');
         for (const p of this.players) {
           if (!this.alive) return;
+          { const fa = this.fam(p, 'atlantide'); if (fa) this.gain(p, fa === 2 ? 3 : 1, '🔱 Famille Atlantide : ' + p.name + ' trouve ' + this.money(fa === 2 ? 3 : 1) + '.'); }
           await this.playTurn(p);
         }
         const fast = this.players.filter((p) => p.firstNext);
@@ -334,6 +335,8 @@ class Room {
       heroes: { kind: 'works', icon: '🚧', text: 'Docteur Chaos a bloqué une rue avec des travaux pendant 2 tours !' },
       mine: { kind: 'rocks', icon: '🪨', text: 'Éboulement ! Une galerie est bouchée pendant 2 tours.' },
       hante: { kind: 'rocks', icon: '🪦', text: 'Une tombe s’effondre sur le chemin : passage bloqué pendant 2 tours !' },
+      atlantide: { kind: 'rocks', icon: '🪸', text: 'Un pan de corail s’effondre : passage bloqué pendant 2 tours !' },
+      espace: { kind: 'rocks', icon: '☄️', text: 'Pluie de météorites ! Une passerelle est bloquée pendant 2 tours.' },
       chevaliers: { kind: 'works', icon: '🪵', text: 'Des bûcherons ont abattu un arbre sur la route : passage bloqué pendant 2 tours !' },
       polaire: { kind: 'rocks', icon: '🧊', text: 'Un bloc de glace tombe du glacier : passage bloqué pendant 2 tours !' },
       egypte: { kind: 'rocks', icon: '🏜️', text: 'Une dune de sable recouvre le chemin : passage bloqué pendant 2 tours !' },
@@ -409,6 +412,16 @@ class Room {
   forkLabel(fromId, toId) {
     const B = this.board, from = B.nodes[fromId];
     let n = B.nodes[toId], guard = 0;
+    if (B.areaNames && B.areaNames.some(Boolean)) { // carte à quartiers : on nomme la destination
+      const nm = (a) => B.areaNames[a] || 'l’autre zone';
+      if (from.door && (B.lifts || []).some((l) => l[0] === fromId && l[1] === toId)) return n.z > from.z ? { label: 'Ascenseur : ' + nm(n.area), icon: '🛗' } : { label: 'Redescendre en ascenseur', icon: '🛗' };
+      let d = n; while (d.area === from.area && guard++ < 30) { if (d.id !== toId && d.next.length > 1) break; d = B.nodes[d.next[0]]; }
+      if (d.area === from.area) return { label: 'Continuer : ' + nm(from.area), icon: '➡️' };
+      const dz = (d.z || 0) - (from.z || 0);
+      if (dz < -20) return { label: (d.z < 0 && !(from.z < 0) ? 'Descendre au ' : 'Descendre : ') + nm(d.area), icon: d.z < 0 ? '🚇' : '⬇️' };
+      if (dz > 20) return { label: 'Monter : ' + nm(d.area), icon: '⬆️' };
+      return { label: 'Vers ' + nm(d.area), icon: d.area === B.areaNames.indexOf('Voie de bus') ? '🚌' : '➡️' };
+    }
     if (!n.branch) return { label: 'Continuer', icon: '➡️' };
     const stairs = n.stairs;
     while (n.branch && guard++ < 20) n = B.nodes[n.next[0]];
@@ -586,6 +599,7 @@ class Room {
           let n = 0;
           if (p.power === 'pickpocket') n += 2;
           if (this.hasComp(p, 'chauvy')) n += 1;
+          const fk = this.fam(p, 'espace'); if (fk) { p.coins += fk; p.stats.earned += fk; }
           if (n) { const got = this.lose(o, n); if (got) this.gain(p, got, (p.power === 'pickpocket' ? '🧤 ' : '🦇 ') + p.name + ' chipe ' + this.money(got) + ' à ' + o.name + ' en passant.'); }
         });
       }
@@ -607,7 +621,7 @@ class Room {
     await flush();
   }
 
-  whenOpen(w) { return w === 'levis' ? levisOpen(this.turn) : w === this.phaseNow(); }
+  whenOpen(w) { return whenOpenAt(w, this.turn, this.phaseNow()); }
   phaseNow() { return dayPhase(this.turn, this.settings.theme) === 'nuit' ? 'nuit' : 'jour'; }
   /** Visite d'un personnage non joueur. */
   async npcVisit(p, node) {
@@ -938,6 +952,23 @@ class Room {
       p.pos = pick(far).id;
       this.emit({ t: 'teleport', pid: p.id, to: p.pos, ride: 'wave' });
       await sleep(2400);
+    } else if (B.id === 'atlantide') {
+      const far = B.nodes.filter((n) => n.area !== B.nodes[p.pos].area && !n.bridge && !n.stairs && n.t !== 'tunnel');
+      this.say('🌀 Courant marin ! ' + p.name + ' est emporté vers une autre zone de la cité !');
+      await sleep(700);
+      p.pos = pick(far).id;
+      this.emit({ t: 'teleport', pid: p.id, to: p.pos, ride: 'wave' });
+      await sleep(2400);
+    } else if (B.id === 'espace') {
+      const foes = this.players.filter((o) => o !== p);
+      if (foes.length) {
+        const o = pick(foes), a = p.pos, b = o.pos;
+        this.say('🕳️ Le trou noir aspire ' + p.name + '… qui ressort à la place de ' + o.name + ', et inversement !');
+        await sleep(900);
+        p.pos = b; o.pos = a;
+        this.emit({ t: 'teleport', pid: p.id, to: b, fly: true }); this.emit({ t: 'teleport', pid: o.id, to: a, fly: true });
+        await sleep(1200);
+      }
     } else if (B.id === 'chevaliers') {
       const foes = this.players.filter((o) => o !== p);
       if (foes.length) {
@@ -1211,9 +1242,7 @@ attach(server, (client) => {
         if (!isHost || room.phase !== 'lobby') return;
         const s = room.settings;
         if (THEMES[m.theme]) s.theme = m.theme;
-        if (['small', 'medium', 'large'].includes(m.size)) s.size = m.size;
-        if (typeof m.floors === 'boolean') s.floors = m.floors;
-        if (s.size === 'small') s.floors = false;
+        s.size = 'large'; s.floors = true; // une seule taille : les grandes cartes à étages
         if ([5, 10, 15, 20, 25].includes(m.turns)) s.turns = m.turns;
         if (['off', 'choice', 'random'].includes(m.powers)) s.powers = m.powers;
         if (typeof m.events === 'boolean') s.events = m.events;
