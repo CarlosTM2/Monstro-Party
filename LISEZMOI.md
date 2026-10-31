@@ -1,4 +1,4 @@
-# Monstro Party — version 2
+# Monstro Party — version 9
 
 Jeu de plateau et de mini-jeux en ligne, de 2 à 8 joueurs, dans le navigateur (PC ou téléphone).
 
@@ -19,36 +19,57 @@ L'archipel de Monstralia. 12 Monstros originaux, chacun avec son histoire, s'aff
 - Nombre de tours : 5 à 25.
 - Pouvoirs spéciaux : désactivés, au choix ou aléatoires (10 pouvoirs indépendants du Monstro).
 - Événements aléatoires : oui ou non.
-- Étoiles bonus à la fin : 3 tirées au hasard parmi 12, ou aucune.
+- Étoiles bonus à la fin : tirées au hasard parmi 12 (2 en partie de 5 ou 10 tours, 3 au-delà), ou aucune.
 - Jeux d'argent : oui ou non (casino, paris sur les mini-jeux, tickets à gratter).
 - Boosters de cartes : oui ou non.
+- Niveau des robots : facile, normal ou difficile.
+- Équipes : chacun pour soi, ou bleus contre rouges (4 joueurs minimum). L'hôte touche le badge d'un joueur pour changer son équipe. À la fin, on additionne les étoiles puis les pièces de chaque équipe.
 
 ## Règles
-- À chaque tour : utiliser un objet (facultatif), puis choisir son dé : normal (1-10), prudent (3-6), risqué (1-3 ou 12-16). Le dernier du classement a aussi le dé revanche (5-12).
+- À chaque tour : utiliser un objet (facultatif), puis lancer le dé classique (1 à 6) ou ton dé spécial.
+- Un seul dé en plus à la fois (boutique ou boosters) : Deuxième dé (2 dés de 6, pour un seul lancer), Petit dé (1 à 3) ou Mini dé (1 ou 2).
+- Aux embranchements, des flèches apparaissent à côté de ton Monstro : touche celle de la direction voulue.
 - Cases : bleue, rouge, ❓ événement, 🎁 objet, 🛒 boutique, 🪺 nid à compagnon, 🎲 Chance, 🌀 Chamboulement, case du boss.
 - Les cases 🎲 Chance et 🌀 Chamboulement peuvent tout renverser (transfert d'étoile, partage des pièces, positions mélangées…).
 - Les 3 derniers tours : la roue de la Dernière ligne droite aide le dernier, et les cases comptent double.
 - Objets (3 maximum) : double dé, triple dé, dé pipé, grappin, échangeur, bouclier, piège, boussole d'étoile, fantôme voleur, boîte mystère.
+- Événements de région : un chemin peut être bloqué pendant 2 tours (dino endormi, marée haute, travaux, éboulement).
+- Équilibrage : pas de vol ou d'échange d'étoiles par la case Chance avant le tour 3, et un échange d'étoiles avec trop d'écart devient un don d'une seule étoile. Fantôme voleur : 40 pièces. Le dernier du classement qui finit sur le podium d'un mini-jeu gagne 2 pièces de consolation.
+- Fin de partie : écran des statistiques, puis étoiles bonus et podium.
 - Compagnons (1 à la fois) : Piou, Chauvy, Tortulle, Rouxi, Bzz, Draki, Hibou, Poulpi.
 
 ## Jeux d'argent (avec la monnaie du jeu)
 - 🎰 Case Casino : machine à sous (×2, ×5, 777 = ×10), roulette (rouge/noir ×2, vert ×14), pile ou face (×2). Mise de 5, 10 ou 20.
 - 💸 Paris avant chaque mini-jeu : 5 ou 10 sur un joueur (×3) ou une équipe / la réussite (×2).
-- 🎟️ Ticket à gratter (boutique) : de 0 à 50 pièces.
+- 🎟️ Ticket à gratter (boutique, 8 pièces) : de 0 à 30 pièces.
 - Étoiles bonus Flambeur (le plus misé) et Veinard (le plus gagné au jeu).
 
 ## Boosters et cartes
 - Un booster contient 3 cartes. On l'obtient à la boutique (6 pièces), en gagnant un mini-jeu chacun pour soi, ou parfois sur une case 🎁.
-- 30 cartes : 20 communes (les 12 Monstros, les 4 boss, les 4 régions) pour la collection, sans effet.
-- Rares (25 %) : Petite bourse (+5), Trouvaille (objet), Élan (+2 au prochain dé), Assurance (bouclier).
+- 20 cartes communes réparties en 4 familles de 5 (région, boss et 3 Monstros) :
+  - 🦖 Jurassique : +1 pièce sur chaque case bleue (+2 avec les 5)
+  - 🏴‍☠️ Pirate : −1 pièce sur chaque achat en boutique (−2 avec les 5)
+  - 🏙️ Méga City : +1 pièce à chaque mini-jeu (+2 avec les 5)
+  - ⛏️ Mine : −1 pièce perdue sur les cases rouges (−2 avec les 5)
+  - 3 cartes d'une famille activent le bonus, les 5 le doublent et rapportent 10 pièces.
+- 🔁 Case Troc : propose à un joueur d'échanger une de tes cartes de famille contre une des siennes. Il accepte ou refuse.
+- 🎒 Les cartes spéciales vont dans ton sac (5 maximum) : à ton tour, tu peux jouer 1 carte et 1 objet avant de lancer le dé. Le bouton 🎒 montre tout ton inventaire. Les cartes sont remises à zéro à chaque nouvelle partie.
+- Maudites (5 %, s'appliquent tout de suite) : Poche trouée (−5 pièces), Escargot (−2 au prochain dé), Taxe du boss (5 pièces au dernier).
+- Rares (25 %) : Petite bourse (+5), Trouvaille (objet), Élan (+2 au prochain dé), Assurance (bouclier), Petit dé, Mini dé, Deuxième dé.
 - Épiques (10 %) : Grosse bourse (+12), Ami fidèle (compagnon), Turbo (+5 au prochain dé), Raton voleur (6 pièces au premier).
 - Légendaires (3 %) : Étoile filante (+1 étoile), Trésor de Monstralia (+25).
 - Album 🃏 consultable pendant la partie, et étoile bonus « Collectionneur » possible à la fin.
 
-## 13 mini-jeux
+## 14 mini-jeux
 Chacun pour soi, équipes (bleu contre rouge selon la dernière case), un contre tous, et coopération :
 Dégaine !, Gâteau Turbo, Chrono Parfait, Compte-les !, Les Coffres, Monstro Kart, Ballons Pop, Patate Bombe,
-Mémo-Monstre, Tir à la corde, Les Portes du Gardien, Le Coffre-fort, Synchro Parfaite.
+Mémo-Monstre, Tir à la corde, Les Portes du Gardien, Le Coffre-fort, Synchro Parfaite, Patinoire Givrée (en 3D : ramasse les gemmes sur la glace).
+Monstro Kart a 8 circuits : Ovale de Monstralia, Anneau de Méga City, Grand Huit, Trèfle du Volcan, Étoile du Désert, Cacahuète des Mines, Côte des Pirates, Glacier Glissant.
+
+## Graphismes 3D
+- Le plateau est affiché en vraie 3D avec Three.js (fichier `public/vendor/three.module.js`, licence MIT) : terrain, décors modélisés, lumière, ombres, eau animée, créatures volantes.
+- Les Monstros sont des personnages 3D (tête, corps, bras, jambes) qui marchent, sautent et saluent.
+- Si un appareil ne gère pas la 3D, le jeu passe automatiquement en affichage 2D.
 
 ## Lancer le jeu sur ton PC (pour tester)
 1. Installe Node.js (version LTS) depuis nodejs.org.

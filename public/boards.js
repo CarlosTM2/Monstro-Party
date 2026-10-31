@@ -50,20 +50,20 @@
   // areas : boucles (centre, rayons, nombre de cases, étage) ; branches : raccourcis ; links : passages d'une boucle à l'autre.
   const LAYOUTS = {
     small: { W: 1000, H: 700, areas: [{ cx: 500, cy: 350, rx: 410, ry: 260, N: 26 }], branches: [{ a: 0, from: 3, to: 11, n: 4, bend: 0.5 }], links: [],
-      force: { shop: 1, nest: 1, chance: 1, chaos: 1, casino: 1 }, tunnels: 2, stars: 1 },
+      force: { shop: 1, nest: 1, chance: 1, chaos: 1, casino: 1, trade: 1 }, tunnels: 2, stars: 1 },
     medium: { W: 1200, H: 840, areas: [{ cx: 600, cy: 420, rx: 530, ry: 345, N: 40 }], branches: [{ a: 0, from: 3, to: 13, n: 5, bend: 0.45 }, { a: 0, from: 23, to: 33, n: 5, bend: 0.45 }], links: [],
-      force: { shop: 2, nest: 1, chance: 2, chaos: 1, casino: 2 }, tunnels: 3, stars: 1 },
+      force: { shop: 2, nest: 1, chance: 2, chaos: 1, casino: 2, trade: 2 }, tunnels: 3, stars: 1 },
     mediumF: { W: 1200, H: 840, areas: [{ cx: 600, cy: 420, rx: 540, ry: 355, N: 36 }, { cx: 600, cy: 410, rx: 260, ry: 155, N: 16, level: 1 }], branches: [],
       links: [{ from: [0, 5], to: [1, 2], n: 2 }, { from: [1, 10], to: [0, 22], n: 2 }],
-      force: { shop: 2, nest: 1, chance: 2, chaos: 1, casino: 2 }, tunnels: 3, stars: 1 },
+      force: { shop: 2, nest: 1, chance: 2, chaos: 1, casino: 2, trade: 2 }, tunnels: 3, stars: 1 },
     large: { W: 1600, H: 1120, areas: [{ cx: 380, cy: 560, rx: 300, ry: 460, N: 32 }, { cx: 1220, cy: 560, rx: 300, ry: 460, N: 32 }],
       branches: [{ a: 0, from: 15, to: 27, n: 5, bend: 0.5 }, { a: 1, from: 2, to: 13, n: 5, bend: 0.5 }],
       links: [{ from: [0, 6], to: [1, 26], n: 3 }, { from: [1, 22], to: [0, 10], n: 3 }],
-      force: { shop: 3, nest: 2, chance: 2, chaos: 2, casino: 3 }, tunnels: 4, stars: 2 },
+      force: { shop: 3, nest: 2, chance: 2, chaos: 2, casino: 3, trade: 2 }, tunnels: 4, stars: 2 },
     largeF: { W: 1600, H: 1120, areas: [{ cx: 380, cy: 690, rx: 300, ry: 380, N: 30 }, { cx: 1220, cy: 690, rx: 300, ry: 380, N: 30 }, { cx: 800, cy: 150, rx: 230, ry: 92, N: 14, level: 1 }],
       branches: [{ a: 0, from: 14, to: 25, n: 5, bend: 0.5 }, { a: 1, from: 5, to: 15, n: 5, bend: 0.5 }],
       links: [{ from: [0, 7], to: [1, 23], n: 3 }, { from: [1, 21], to: [0, 9], n: 3 }, { from: [0, 3], to: [2, 11], n: 1 }, { from: [2, 3], to: [1, 27], n: 1 }],
-      force: { shop: 3, nest: 2, chance: 2, chaos: 2, casino: 3 }, tunnels: 4, stars: 2 },
+      force: { shop: 3, nest: 2, chance: 2, chaos: 2, casino: 3, trade: 2 }, tunnels: 4, stars: 2 },
   };
 
   function layoutKey(size, floors) {
@@ -86,7 +86,7 @@
         const c = Math.cos(a), s = Math.sin(a), p = A.level ? 2 : T.shape;
         const k = Math.pow(Math.pow(Math.abs(c), p) + Math.pow(Math.abs(s), p), -1 / p);
         const w = 1 + (A.level ? 0 : T.wobble) * Math.sin(a * T.waves + T.seed + ai);
-        nodes.push({ id: nodes.length, x: Math.round(A.cx + A.rx * c * k * w), y: Math.round(A.cy + A.ry * s * k * w), t: 'blue', next: [], level: A.level || 0, area: ai });
+        nodes.push({ id: nodes.length, x: Math.round(A.cx + A.rx * c * k * w), y: Math.round(A.cy + A.ry * s * k * w), t: 'blue', next: [], level: A.level || 0, area: ai, z: (A.level || 0) * 60 });
         ids.push(nodes.length - 1);
       }
       ids.forEach(function (id, i) { nodes[id].next.push(ids[(i + 1) % ids.length]); });
@@ -102,7 +102,7 @@
         const x = (1 - t) * (1 - t) * A.x + 2 * (1 - t) * t * px + t * t * B.x;
         const y = (1 - t) * (1 - t) * A.y + 2 * (1 - t) * t * py + t * t * B.y;
         const lv = level != null ? level : (t < 0.5 ? A.level : B.level);
-        const nd = { id: nodes.length, x: Math.round(x), y: Math.round(y), t: 'blue', next: [], level: lv, area: A.area, branch: true };
+        const nd = { id: nodes.length, x: Math.round(x), y: Math.round(y), t: 'blue', next: [], level: lv, area: A.area, branch: true, z: Math.round(((A.level || 0) * (1 - t) + (B.level || 0) * t) * 60) };
         if (A.level !== B.level) nd.stairs = true;
         nodes.push(nd);
         prev.next.push(nd.id);
@@ -207,15 +207,25 @@
   }
 
   /** Dessin SVG d'un Monstro (viewBox 100×100). */
+  let svgCount = 0;
   function charSVG(ch, mood) {
-    const c = ch.c, c2 = ch.c2, d = shade(c, -0.35);
-    const o = [];
+    const c = ch.c, c2 = ch.c2, d = shade(c, -0.45);
+    const id = 'mc' + ch.id + '_' + (++svgCount); // identifiant unique : sinon un dessin caché masque les autres
+    const B = 'url(#' + id + 'b)', L = 'url(#' + id + 'l)';
+    // Volume : dégradés (lumière en haut à gauche), ombre portée, reflets.
+    const o = ['<defs>' +
+      '<radialGradient id="' + id + 'b" cx="34%" cy="28%" r="80%"><stop offset="0" stop-color="' + shade(c, 0.55) + '"/><stop offset=".45" stop-color="' + c + '"/><stop offset="1" stop-color="' + shade(c, -0.42) + '"/></radialGradient>' +
+      '<radialGradient id="' + id + 'l" cx="35%" cy="30%" r="80%"><stop offset="0" stop-color="#fff"/><stop offset=".5" stop-color="' + c2 + '"/><stop offset="1" stop-color="' + shade(c2, -0.25) + '"/></radialGradient>' +
+      '<linearGradient id="' + id + 's" x1="0" y1="0" x2="0" y2="1"><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".28"/></linearGradient>' +
+      '<radialGradient id="' + id + 'e" cx="40%" cy="35%" r="70%"><stop offset=".6" stop-color="#fff"/><stop offset="1" stop-color="#cbd5e1"/></radialGradient>' +
+      '<radialGradient id="' + id + 'g" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#000" stop-opacity=".35"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>' +
+      '</defs>', '<ellipse cx="50" cy="95" rx="34" ry="5" fill="url(#' + id + 'g)"/>'];
     const st = 'stroke="' + d + '" stroke-width="3" stroke-linejoin="round"';
     // Cornes / oreilles / antenne (derrière le corps)
-    if (ch.top === 'horns') o.push('<path d="M30 30 L22 8 L42 24 Z M70 30 L78 8 L58 24 Z" fill="' + c2 + '" ' + st + '/>');
-    if (ch.top === 'ears') o.push('<path d="M26 34 L20 12 L42 26 Z M74 34 L80 12 L58 26 Z" fill="' + c + '" ' + st + '/>');
-    if (ch.top === 'antenna') o.push('<path d="M50 26 Q46 12 54 6" fill="none" stroke="' + d + '" stroke-width="3"/><circle cx="54" cy="6" r="5" fill="' + c2 + '" ' + st + '/>');
-    if (ch.top === 'spikes') o.push('<path d="M28 34 L34 14 L42 30 L50 10 L58 30 L66 14 L72 34 Z" fill="' + c2 + '" ' + st + '/>');
+    if (ch.top === 'horns') o.push('<path d="M30 30 L22 8 L42 24 Z M70 30 L78 8 L58 24 Z" fill="' + L + '" ' + st + '/>');
+    if (ch.top === 'ears') o.push('<path d="M26 34 L20 12 L42 26 Z M74 34 L80 12 L58 26 Z" fill="' + B + '" ' + st + '/>');
+    if (ch.top === 'antenna') o.push('<path d="M50 26 Q46 12 54 6" fill="none" stroke="' + d + '" stroke-width="3"/><circle cx="54" cy="6" r="5" fill="' + L + '" ' + st + '/>');
+    if (ch.top === 'spikes') o.push('<path d="M28 34 L34 14 L42 30 L50 10 L58 30 L66 14 L72 34 Z" fill="' + L + '" ' + st + '/>');
     if (ch.top === 'bolt') o.push('<path d="M52 2 L40 22 L50 22 L44 36 L62 16 L52 16 Z" fill="#fde047" stroke="#a16207" stroke-width="2.5" stroke-linejoin="round"/>');
     if (ch.extra === 'cape') o.push('<path d="M22 50 Q10 80 18 96 L82 96 Q90 80 78 50 Z" fill="#dc2626" stroke="#7f1d1d" stroke-width="3"/>');
     // Corps
@@ -229,9 +239,11 @@
       dino: 'M20 92 Q14 60 26 44 Q30 22 52 20 Q80 20 84 44 Q90 60 84 92 Z',
       cloud: 'M24 86 Q8 84 10 66 Q8 50 24 48 Q24 26 46 28 Q58 14 74 28 Q92 30 90 50 Q98 66 86 78 Q84 92 66 88 Q50 96 36 88 Q30 90 24 86 Z',
     };
-    o.push('<path d="' + bodies[ch.body] + '" fill="' + c + '" ' + st + '/>');
+    o.push('<path d="' + bodies[ch.body] + '" fill="' + B + '" ' + st + '/>');
+    o.push('<path d="' + bodies[ch.body] + '" fill="url(#' + id + 's)"/>');
+    o.push('<ellipse cx="36" cy="33" rx="11" ry="6" fill="#fff" opacity=".38" transform="rotate(-25 36 33)"/>');
     // Ventre
-    if (ch.body !== 'cloud' && ch.body !== 'flame') o.push('<ellipse cx="50" cy="74" rx="20" ry="14" fill="' + c2 + '" opacity="0.85"/>');
+    if (ch.body !== 'cloud' && ch.body !== 'flame') o.push('<ellipse cx="50" cy="74" rx="20" ry="14" fill="' + L + '" opacity="0.9"/>');
     if (ch.body === 'flame') o.push('<path d="M50 40 Q62 56 62 70 Q62 86 50 86 Q38 86 38 70 Q38 56 50 40 Z" fill="' + c2 + '"/>');
     if (ch.extra === 'shine') o.push('<ellipse cx="34" cy="38" rx="6" ry="10" fill="#fff" opacity="0.6" transform="rotate(25 34 38)"/>');
     // Yeux
@@ -243,9 +255,9 @@
       const y = ch.eyes === 3 && i === 1 ? eyeY - 8 : eyeY;
       if (happy) { o.push('<path d="M' + (x - r) + ' ' + (y + 2) + ' Q' + x + ' ' + (y - r - 2) + ' ' + (x + r) + ' ' + (y + 2) + '" fill="none" stroke="#111" stroke-width="3.5" stroke-linecap="round"/>'); return; }
       const glow = ch.extra === 'glow';
-      o.push('<circle cx="' + x + '" cy="' + y + '" r="' + r + '" fill="' + (glow ? '#fef08a' : '#fff') + '" stroke="#111" stroke-width="2"/>');
+      o.push('<circle cx="' + x + '" cy="' + y + '" r="' + r + '" fill="' + (glow ? '#fef08a' : 'url(#' + id + 'e)') + '" stroke="#111" stroke-width="2"/>');
       o.push('<circle cx="' + (x + 1.5) + '" cy="' + (y + (sad ? 3 : 1.5)) + '" r="' + (r * 0.5) + '" fill="#111"/>');
-      o.push('<circle cx="' + (x + 3) + '" cy="' + (y - 1) + '" r="' + (r * 0.18) + '" fill="#fff"/>');
+      o.push('<circle cx="' + (x + 3) + '" cy="' + (y - 1.5) + '" r="' + (r * 0.22) + '" fill="#fff"/><circle cx="' + (x - 1) + '" cy="' + (y + 3) + '" r="' + (r * 0.1) + '" fill="#fff" opacity=".8"/>');
       if (sad) o.push('<path d="M' + (x - r) + ' ' + (y - r - 4) + ' L' + (x + r) + ' ' + (y - r + (i ? -2 : 2)) + '" stroke="#111" stroke-width="3" stroke-linecap="round"/>');
     });
     if (ch.extra === 'bandana') o.push('<path d="M22 34 Q50 22 78 34 L78 42 Q50 30 22 42 Z" fill="#dc2626" stroke="#7f1d1d" stroke-width="2"/><circle cx="30" cy="38" r="2" fill="#fff"/><circle cx="50" cy="33" r="2" fill="#fff"/><circle cx="70" cy="38" r="2" fill="#fff"/>');
@@ -266,7 +278,8 @@
   /* ---------------- Cartes à collectionner (boosters) ---------------- */
   // Communes : pour la collection, sans effet. Rares, épiques, légendaires : un bonus immédiat.
   const RARITY = {
-    commune: { name: 'Commune', color: '#94a3b8', weight: 62 },
+    maudite: { name: 'Maudite', color: '#ef4444', weight: 5 },
+    commune: { name: 'Commune', color: '#94a3b8', weight: 57 },
     rare: { name: 'Rare', color: '#38bdf8', weight: 25 },
     epique: { name: 'Épique', color: '#c084fc', weight: 10 },
     legendaire: { name: 'Légendaire', color: '#fbbf24', weight: 3 },
@@ -287,36 +300,54 @@
     r_trouvaille: { icon: '🔍', name: 'Trouvaille', rarity: 'rare', desc: 'Un objet au hasard.', fx: 'item' },
     r_elan: { icon: '👟', name: 'Élan', rarity: 'rare', desc: '+2 à ton prochain lancer de dé.', fx: 'dice2' },
     r_assurance: { icon: '🛡️', name: 'Assurance', rarity: 'rare', desc: 'Un bouclier contre ta prochaine perte.', fx: 'shield' },
-    e_grossebourse: { icon: '💰', name: 'Grosse bourse', rarity: 'epique', desc: '+12 pièces.', fx: 'coins12' },
+    r_de_petit: { icon: '🔹', name: 'Petit dé', rarity: 'rare', desc: 'Tu reçois le Petit dé (1 à 3).', fx: 'die:petit' },
+    r_de_mini: { icon: '🔸', name: 'Mini dé', rarity: 'rare', desc: 'Tu reçois le Mini dé (1 ou 2).', fx: 'die:mini' },
+    r_de_deux: { icon: '🎲', name: 'Deuxième dé', rarity: 'rare', desc: 'Tu reçois un deuxième dé de 6 pour un lancer.', fx: 'die:deux' },
+    e_bourse: { icon: '💰', name: 'Grosse bourse', rarity: 'epique', desc: '+12 pièces.', fx: 'coins12' },
     e_ami: { icon: '🐾', name: 'Ami fidèle', rarity: 'epique', desc: 'Un compagnon au hasard te rejoint.', fx: 'companion' },
     e_turbo: { icon: '🚀', name: 'Turbo', rarity: 'epique', desc: '+5 à ton prochain lancer de dé.', fx: 'dice5' },
-    e_voleur: { icon: '🦝', name: 'Raton voleur', rarity: 'epique', desc: 'Vole 6 pièces au premier du classement.', fx: 'steal' },
+    e_raton: { icon: '🦝', name: 'Raton voleur', rarity: 'epique', desc: 'Vole 6 pièces au joueur en tête.', fx: 'steal' },
+    x_poche: { icon: '🕳️', name: 'Poche trouée', rarity: 'maudite', desc: 'Tu perds 5 pièces.', fx: 'lose5' },
+    x_escargot: { icon: '🐌', name: 'Escargot', rarity: 'maudite', desc: '−2 à ton prochain lancer de dé.', fx: 'slow2' },
+    x_taxe: { icon: '💸', name: 'Taxe du boss', rarity: 'maudite', desc: 'Tu donnes 5 pièces au dernier du classement.', fx: 'tax5' },
     g_etoile: { icon: '🌠', name: 'Étoile filante', rarity: 'legendaire', desc: '+1 étoile !', fx: 'star' },
     g_jackpot: { icon: '🏆', name: 'Trésor de Monstralia', rarity: 'legendaire', desc: '+25 pièces.', fx: 'coins25' },
   });
+
+  /* Familles de cartes : 3 cartes d'une famille = petit bonus, les 5 = bonus doublé + 10 pièces.
+     Une famille par région : chaque nouvelle carte (plateau) ajoutera sa propre famille ici. */
+  const FAMILIES = {
+    jurassique: { icon: '🦖', name: 'Famille Jurassique', cards: ['l_vallee', 'b_magmator', 'm_dinomite', 'm_gromp', 'm_fifi'], bonus: ['+1 pièce sur chaque case bleue', '+2 pièces sur chaque case bleue'] },
+    pirate: { icon: '🏴‍☠️', name: 'Famille Pirate', cards: ['l_ile', 'b_calamarde', 'm_krakos', 'm_moustache', 'm_bulle'], bonus: ['−1 pièce sur chaque achat en boutique', '−2 pièces sur chaque achat en boutique'] },
+    ville: { icon: '🏙️', name: 'Famille Méga City', cards: ['l_ville', 'b_chaos', 'm_volt', 'm_zazou', 'm_nuage'], bonus: ['+1 pièce à chaque mini-jeu', '+2 pièces à chaque mini-jeu'] },
+    mine: { icon: '⛏️', name: 'Famille Mine', cards: ['l_mine', 'b_taupe', 'm_pikrok', 'm_ombrette', 'm_patapouf'], bonus: ['−1 pièce perdue sur les cases rouges', '−2 pièces perdues sur les cases rouges'] },
+  };
+  Object.keys(FAMILIES).forEach(function (f) { FAMILIES[f].cards.forEach(function (id) { CARDS[id].fam = f; }); });
+  function famLevel(cards, f) { const own = new Set(cards || []); const n = FAMILIES[f].cards.filter(function (id) { return own.has(id); }).length; return n >= 5 ? 2 : n >= 3 ? 1 : 0; }
 
   /* ---------------- Données de jeu ---------------- */
   const GAME = {
     // Dés proposés à chaque tour
     dice: {
-      normal: { label: 'Dé normal', desc: '1 à 10', icon: '🎲' },
-      prudent: { label: 'Dé prudent', desc: '3 à 6', icon: '🛡️' },
-      risque: { label: 'Dé risqué', desc: '1-3 ou 12-16', icon: '🔥' },
-      revanche: { label: 'Dé revanche', desc: '5 à 12 (dernier seulement)', icon: '💢' },
+      // Tout le monde a le dé classique. Les autres s'achètent en boutique ou se trouvent dans les boosters (un seul à la fois).
+      classique: { label: 'Dé classique', desc: '1 à 6', icon: '🎲', faces: [1, 2, 3, 4, 5, 6] },
+      deux: { label: 'Deuxième dé', desc: '2 dés de 6 (2 à 12), pour un seul lancer', icon: '🎲🎲', faces: [1, 2, 3, 4, 5, 6], count: 2, price: 6, uses: 1 },
+      petit: { label: 'Petit dé', desc: '1 à 3, pour viser une case précise', icon: '🔹', faces: [1, 2, 3], price: 4 },
+      mini: { label: 'Mini dé', desc: '1 ou 2, pour avancer tout doucement', icon: '🔸', faces: [1, 2], price: 3 },
     },
     // Objets : 3 maximum dans le sac
     items: {
-      double: { icon: '🎲', name: 'Double dé', price: 5, desc: 'Lance 2 dés et additionne.' },
-      triple: { icon: '🎰', name: 'Triple dé', price: 10, desc: 'Lance 3 dés et additionne.' },
-      pipe: { icon: '🎯', name: 'Dé pipé', price: 8, desc: 'Choisis ton résultat de 1 à 10.' },
+      double: { icon: '🎲', name: 'Double dé', price: 5, desc: 'Lance 2 dés classiques et additionne.' },
+      triple: { icon: '🎰', name: 'Triple dé', price: 10, desc: 'Lance 3 dés classiques et additionne.' },
+      pipe: { icon: '🎯', name: 'Dé pipé', price: 8, desc: 'Choisis ton résultat de 1 à 6.' },
       grappin: { icon: '🪝', name: 'Grappin', price: 6, desc: 'Vole 5 à 15 pièces à un joueur.' },
       echange: { icon: '🔄', name: 'Échangeur', price: 8, desc: 'Échange ta place avec un joueur.' },
       bouclier: { icon: '🛡️', name: 'Bouclier', price: 5, desc: 'Annule ta prochaine perte (pièces ou étoile).' },
       piege: { icon: '🪤', name: 'Piège', price: 5, desc: 'Pose un piège sur ta case : qui s’y arrête te donne 10 pièces.' },
       boussole: { icon: '🧭', name: 'Boussole d’étoile', price: 15, desc: 'Téléporte-toi juste avant l’étoile.' },
-      fantome: { icon: '👻', name: 'Fantôme voleur', price: 25, desc: 'Vole une étoile à un joueur.' },
+      fantome: { icon: '👻', name: 'Fantôme voleur', price: 40, desc: 'Vole une étoile à un joueur.' },
       mystere: { icon: '🎁', name: 'Boîte mystère', price: 4, desc: 'Se transforme en un objet au hasard.' },
-      ticket: { icon: '🎟️', name: 'Ticket à gratter', price: 4, desc: 'Gratte-le : de 0 à 50 pièces !' },
+      ticket: { icon: '🎟️', name: 'Ticket à gratter', price: 8, desc: 'Gratte-le : de 0 à 30 pièces !' },
     },
     // Compagnons : un seul à la fois, à adopter sur les nids
     companions: {
@@ -368,6 +399,6 @@
     },
   };
 
-  const api = { CARDS: CARDS, RARITY: RARITY, THEMES: THEMES, makeBoard: makeBoard, CHARACTERS: CHARACTERS, COLORS: COLORS, WORLD: WORLD, charSVG: charSVG, GAME: GAME };
+  const api = { CARDS: CARDS, RARITY: RARITY, FAMILIES: FAMILIES, famLevel: famLevel, THEMES: THEMES, makeBoard: makeBoard, CHARACTERS: CHARACTERS, COLORS: COLORS, WORLD: WORLD, charSVG: charSVG, GAME: GAME };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.PARTY = api;
 })(this);

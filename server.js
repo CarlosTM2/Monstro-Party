@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { attach } = require('./ws');
-const { THEMES, makeBoard, CHARACTERS, COLORS, WORLD, GAME, CARDS, RARITY } = require('./public/boards.js');
+const { THEMES, makeBoard, CHARACTERS, COLORS, WORLD, GAME, CARDS, RARITY, FAMILIES, famLevel } = require('./public/boards.js');
 const MINIGAMES = require('./minigames.js');
 
 const PORT = process.env.PORT || 3000;
@@ -49,7 +49,7 @@ class Room {
     this.code = code;
     this.players = [];
     this.phase = 'lobby'; // lobby | board | minigame | end
-    this.settings = { theme: 'jurassic', size: 'medium', floors: false, turns: 10, powers: 'off', events: true, bonus: true, gambling: true, boosters: true };
+    this.settings = { theme: 'jurassic', size: 'medium', floors: false, turns: 10, powers: 'off', events: true, bonus: true, gambling: true, boosters: true, bots: 'normal', teams: false };
     this.reset();
     this.alive = true;
     this.waiters = new Map();
@@ -57,7 +57,7 @@ class Room {
   }
   reset() {
     this.turn = 0; this.current = null; this.stars = []; this.traps = {}; this.prompt = null; this.mg = null;
-    this.log = []; this.lastMg = []; this.mods = {}; this.endInfo = null; this.lastChance = null; this.roundEvent = null;
+    this.log = []; this.lastMg = []; this.mods = {}; this.endInfo = null; this.lastChance = null; this.roundEvent = null; this.blocks = [];
   }
   get board() { return makeBoard(this.settings.theme, this.settings.size, this.settings.floors); }
   player(id) { return this.players.find((p) => p.id === id); }
@@ -68,12 +68,12 @@ class Room {
   publicState() {
     return {
       code: this.code, phase: this.phase, settings: this.settings, turn: this.turn,
-      current: this.current, stars: this.stars, traps: this.traps, log: this.log.slice(-6), mods: this.mods, roundEvent: this.roundEvent, lastChance: this.lastChance,
+      current: this.current, stars: this.stars, traps: this.traps, blocks: this.blocks, log: this.log.slice(-6), mods: this.mods, roundEvent: this.roundEvent, lastChance: this.lastChance,
       prompt: this.prompt ? { pid: this.prompt.pid, kind: this.prompt.kind, data: this.prompt.data, deadline: this.prompt.deadline } : null,
       mg: this.mg ? this.mg.pub : null,
       players: this.players.map((p) => ({
         id: p.id, name: p.name, char: p.char, color: p.color, coins: p.coins, stars: p.stars, pos: p.pos, host: p.host, bot: p.bot,
-        online: p.bot || !!p.client, cards: p.cards, buff: p.buff, items: p.items, companion: p.companion, power: p.power, shield: p.shield, lastColor: p.lastColor, stats: p.stats,
+        online: p.bot || !!p.client, cards: p.cards, buff: p.buff, die: p.die, dieUses: p.dieUses, team: p.team, hand: p.hand, items: p.items, companion: p.companion, power: p.power, shield: p.shield, lastColor: p.lastColor, stats: p.stats,
       })),
     };
   }
@@ -103,6 +103,8 @@ class Room {
     const colorsUsed = new Set(this.players.map((p) => p.color));
     const color = COLORS.find((c) => !colorsUsed.has(c));
     const p = { id: crypto.randomBytes(6).toString('hex'), token: crypto.randomBytes(16).toString('hex'), name: name || ch.name, char: ch.id, color, host: this.players.length === 0, bot, client: null, power: null };
+    const nA = this.players.filter((q) => q.team === 'A').length, nB = this.players.length - nA;
+    p.team = nA <= nB ? 'A' : 'B';
     this.resetPlayer(p);
     this.players.push(p);
     return p;
@@ -110,7 +112,7 @@ class Room {
   resetPlayer(p) {
     p.coins = 10; p.stars = 0; p.pos = 0; p.items = []; p.companion = null; p.shield = false; p.lastColor = 'blue';
     p.stats = { steps: 0, mgWins: 0, shopSpent: 0, itemsUsed: 0, events: 0, companions: 0, red: 0, blue: 0, earned: 0, wagered: 0, gambleWon: 0, cards: 0, boosters: 0 };
-    p.cards = []; p.buff = 0;
+    p.cards = []; p.hand = []; p.buff = 0; p.die = null; p.dieUses = null; p.famDone = {};
   }
 
   /* ---------------- Outils de règles ---------------- */
@@ -182,10 +184,20 @@ class Room {
       this.phase = 'board';
       this.players = shuffle(this.players);
       this.players.forEach((p) => this.resetPlayer(p));
+      if (this.settings.teams) {
+        if (this.players.length < 4) { this.settings.teams = false; this.say('Pas assez de joueurs pour les équipes : chacun pour soi !'); }
+        else { // équilibre les équipes
+          let A = this.players.filter((p) => p.team === 'A'), Bt = this.players.filter((p) => p.team !== 'A');
+          while (A.length - Bt.length > 1) { const x = A.pop(); x.team = 'B'; Bt.push(x); }
+          while (Bt.length - A.length > 1) { const x = Bt.pop(); x.team = 'A'; A.push(x); }
+          this.players.forEach((p) => { if (p.team !== 'A') p.team = 'B'; });
+        }
+      }
       // Pouvoirs
       if (this.settings.powers === 'random') { const ps = shuffle(POWER_KEYS); this.players.forEach((p, i) => { p.power = ps[i % ps.length]; }); }
       else if (this.settings.powers === 'choice') this.players.forEach((p) => { if (!p.power || p.bot) p.power = pick(POWER_KEYS); });
       else this.players.forEach((p) => { p.power = null; });
+      if (process.env.START_CARDS) { const fc = Object.keys(CARDS).filter((id) => CARDS[id].fam); this.players.forEach((p) => { for (let i = 0; i < +process.env.START_CARDS; i++) p.cards.push(pick(fc)); this.checkFamilies(p); }); } // tests
       this.players.forEach((p) => { if (p.power === 'dresseur') this.adopt(p, pick(COMP_KEYS)); });
       const nStars = B.stars + (this.players.length >= 6 ? 1 : 0); // plus d'étoiles quand on est nombreux
       for (let i = 0; i < nStars; i++) this.placeStar(i);
@@ -196,6 +208,8 @@ class Room {
         this.mods = {};
         this.broadcast();
         if (this.settings.turns >= 5 && this.turn === this.settings.turns - 2) await this.finalStretch();
+        this.blocks = this.blocks.filter((b) => --b.left > 0);
+        if (!this.blocks.length && this.settings.events && this.turn >= 2 && Math.random() < (process.env.FORCE_BLOCK ? 1 : 0.3)) await this.regionBlock(); // FORCE_BLOCK : tests
         if (this.settings.events && this.turn >= 2 && Math.random() < 0.35) await this.randomEvent();
         for (const p of this.players) {
           if (!this.alive) return;
@@ -238,6 +252,25 @@ class Room {
     await sleep(1500);
   }
 
+  /** Événement de région : un chemin est bloqué pendant 2 tours. */
+  async regionBlock() {
+    const B = this.board;
+    const forks = B.nodes.filter((n) => n.next.length > 1);
+    if (!forks.length) return;
+    const n = pick(forks), to = pick(n.next);
+    const E = {
+      jurassic: { kind: 'dino', icon: '🦕', text: 'Un dino fait la sieste en travers du chemin ! Ce passage est bloqué pendant 2 tours.' },
+      pirate: { kind: 'tide', icon: '🌊', text: 'La marée monte : un ponton est sous l’eau pendant 2 tours !' },
+      heroes: { kind: 'works', icon: '🚧', text: 'Docteur Chaos a bloqué une rue avec des travaux pendant 2 tours !' },
+      mine: { kind: 'rocks', icon: '🪨', text: 'Éboulement ! Une galerie est bouchée pendant 2 tours.' },
+    }[B.id];
+    this.blocks = [{ from: n.id, to, left: 2, kind: E.kind, icon: E.icon }];
+    this.emit({ t: 'banner', text: E.icon + ' ' + E.text });
+    this.say(E.icon + ' ' + E.text);
+    this.broadcast();
+    await sleep(2400);
+  }
+
   async randomEvent() {
     const B = this.board;
     const all = this.players;
@@ -274,17 +307,29 @@ class Room {
     this.broadcast();
   }
 
+  fam(p, f) { return this.settings.boosters ? famLevel(p.cards, f) : 0; }
+  /** Annonce les familles qui progressent (3 cartes, puis les 5). */
+  checkFamilies(p) {
+    p.famDone = p.famDone || {};
+    Object.keys(FAMILIES).forEach((f) => {
+      const lvl = famLevel(p.cards, f), F = FAMILIES[f];
+      if (lvl > (p.famDone[f] || 0)) {
+        p.famDone[f] = lvl;
+        if (lvl === 2) { this.gain(p, 10); this.emit({ t: 'banner', text: F.icon + ' ' + p.name + ' complète la ' + F.name + ' ! +10 pièces et bonus doublé' }); this.say(F.icon + ' ' + F.name + ' complète pour ' + p.name + ' : ' + F.bonus[1] + ' (+10 pièces) !'); }
+        else this.say(F.icon + ' ' + p.name + ' a 3 cartes de la ' + F.name + ' : ' + F.bonus[0] + ' !');
+      }
+    });
+    p.stats.cards = new Set(p.cards).size;
+  }
+
   diceOptions(p) {
-    const opts = ['normal', 'prudent', 'risque'];
-    if (this.turn >= 3 && this.isLast(p)) opts.push('revanche');
+    const opts = ['classique'];
+    if (p.die) opts.push(p.die);
     return opts;
   }
-  rollDie(kind) {
-    if (kind === 'prudent') return rand(3, 6);
-    if (kind === 'risque') return pick([1, 2, 3, 12, 13, 14, 15, 16]);
-    if (kind === 'revanche') return rand(5, 12);
-    return rand(1, 10);
-  }
+  rollDie(kind) { const d = GAME.dice[kind] || GAME.dice.classique; return Array.from({ length: d.count || 1 }, () => pick(d.faces)); }
+  d6() { return rand(1, 6); }
+  giveDie(p, k, text) { p.die = k; p.dieUses = GAME.dice[k].uses || null; this.emit({ t: 'fx', kind: 'item', pid: p.id, icon: GAME.dice[k].icon }); if (text) this.say(text); }
 
   forkLabel(fromId, toId) {
     const B = this.board, from = B.nodes[fromId];
@@ -305,16 +350,29 @@ class Room {
     if (p.companion === 'poulpi' && this.turn % 3 === 0) this.giveItem(p, pick(CHEAP_ITEMS), '🐙 Poulpi a trouvé un objet pour ' + p.name + ' !');
     // 1) Objet éventuel, puis choix du dé
     let forced = null; // dés imposés par un objet
-    let usedItem = false;
-    for (let guard = 0; guard < 3; guard++) {
+    let usedItem = false, usedCard = false;
+    for (let guard = 0; guard < 4; guard++) {
       const dice = this.diceOptions(p);
       const items = usedItem || forced ? [] : p.items.map((k, i) => ({ i, k }));
+      const hand = usedCard || forced ? [] : p.hand.map((id, i) => ({ i, id }));
       const fallback = () => {
-        if (p.bot && items.length && Math.random() < 0.45) return { item: pick(items).i };
-        return { dice: p.bot && this.isLast(p) && dice.includes('revanche') ? 'revanche' : 'normal' };
+        if (p.bot && hand.length && Math.random() < 0.5) return { card: pick(hand).i };
+        if (p.bot && items.length && Math.random() < { easy: 0.2, normal: 0.45, hard: 0.7 }[this.settings.bots]) return { item: pick(items).i };
+        return { dice: p.die === 'deux' ? 'deux' : 'classique' };
       };
-      const ans = forced ? { dice: 'normal' } : await this.ask(p.id, 'turn', { dice, items, canUse: !usedItem }, fallback,
-        (v) => v && ((v.dice && dice.includes(v.dice)) || (typeof v.item === 'number' && items.some((x) => x.i === v.item))));
+      const ans = forced ? { dice: 'classique' } : await this.ask(p.id, 'turn', { dice, items, hand, canUse: !usedItem }, fallback,
+        (v) => v && ((v.dice && dice.includes(v.dice)) || (typeof v.item === 'number' && items.some((x) => x.i === v.item)) || (typeof v.card === 'number' && hand.some((x) => x.i === v.card))));
+      if (ans.card != null && !usedCard) {
+        usedCard = true;
+        const id = p.hand.splice(ans.card, 1)[0];
+        const c = CARDS[id];
+        this.say('🃏 ' + p.name + ' joue la carte ' + c.icon + ' ' + c.name + ' !');
+        this.emit({ t: 'fx', kind: 'item', pid: p.id, icon: c.icon });
+        this.applyCard(p, id);
+        this.broadcast();
+        await sleep(900);
+        continue;
+      }
       if (ans.item != null && !usedItem) {
         usedItem = true;
         const key = p.items.splice(ans.item, 1)[0];
@@ -327,13 +385,15 @@ class Room {
       // 2) Lancer
       let values;
       if (forced) values = forced;
-      else values = [this.rollDie(ans.dice)];
+      else values = this.rollDie(ans.dice);
+      if (!forced && ans.dice === p.die && p.dieUses) { p.dieUses--; if (p.dieUses <= 0) { const lbl = GAME.dice[p.die].label; p.die = null; p.dieUses = null; this.say('🎲 Le ' + lbl + ' de ' + p.name + ' est usé : c’était son dernier lancer.'); } }
       const bonus = [];
       if (p.companion === 'piou') bonus.push({ icon: '🐣', n: 1 });
-      if (p.buff) { bonus.push({ icon: '🃏', n: p.buff }); p.buff = 0; }
+      if (p.buff) { bonus.push({ icon: p.buff < 0 ? '🐌' : '🃏', n: p.buff }); p.buff = 0; }
       if (p.companion === 'draki' && Math.random() < 0.25) bonus.push({ icon: '🐉', n: rand(1, 6) });
       if (p.power === 'revanchard' && this.isLast(p)) bonus.push({ icon: '💢', n: rand(1, 6) });
       let total = values.reduce((a, b) => a + b, 0) + bonus.reduce((a, b) => a + b.n, 0);
+      if (total < 1) { bonus.push({ icon: '🐌', n: 1 - total }); total = 1; } // on avance toujours d'au moins 1
       if (p.power === 'chanceux' && total < 3) { bonus.push({ icon: '🍀', n: 3 - total }); total = 3; }
       if (this.mods.blackout && total > 6) { total = 6; bonus.push({ icon: '🔌', n: 0, cap: 6 }); }
       this.emit({ t: 'dice', pid: p.id, values, bonus, total });
@@ -361,10 +421,10 @@ class Room {
     this.emit({ t: 'fx', kind: 'item', pid: p.id, icon: it.icon });
     await sleep(700);
     switch (key) {
-      case 'double': return { dice: [rand(1, 10), rand(1, 10)] };
-      case 'triple': return { dice: [rand(1, 10), rand(1, 10), rand(1, 10)] };
+      case 'double': return { dice: [this.d6(), this.d6()] };
+      case 'triple': return { dice: [this.d6(), this.d6(), this.d6()] };
       case 'pipe': {
-        const n = await this.ask(p.id, 'number', { text: 'Choisis ton résultat', min: 1, max: 10 }, () => rand(6, 10), (v) => Number.isInteger(v) && v >= 1 && v <= 10);
+        const n = await this.ask(p.id, 'number', { text: 'Choisis ton résultat', min: 1, max: 6 }, () => rand(4, 6), (v) => Number.isInteger(v) && v >= 1 && v <= 6);
         return { dice: [n] };
       }
       case 'grappin': {
@@ -401,8 +461,8 @@ class Room {
         return null;
       }
       case 'ticket': {
-        const prize = pick([0, 0, 0, 2, 2, 5, 5, 8, 10, 15, 20, 50]);
-        p.stats.wagered += 4;
+        const prize = pick([0, 0, 0, 0, 2, 3, 5, 5, 8, 10, 15, 30]); // moyenne < prix (8)
+        p.stats.wagered += GAME.items.ticket.price;
         this.emit({ t: 'casino', pid: p.id, game: 'ticket', prize, win: prize });
         await sleep(2600);
         if (prize) { p.stats.gambleWon += prize; this.gain(p, prize, '🎟️ ' + p.name + ' gratte son ticket : ' + this.money(prize) + ' !'); }
@@ -423,8 +483,12 @@ class Room {
       let nextId = node.next[0];
       if (node.next.length > 1) {
         await flush();
-        const opts = node.next.map((id) => Object.assign({ value: id }, this.forkLabel(node.id, id)));
-        nextId = await this.ask(p.id, 'fork', { text: 'Embranchement ! Où vas-tu ?', options: opts }, () => pick(opts).value, (v) => opts.some((o) => o.value === v));
+        const open = node.next.filter((id) => !this.blocks.some((b) => b.from === node.id && b.to === id));
+        const ways = open.length ? open : node.next;
+        if (ways.length > 1) {
+          const opts = ways.map((id) => Object.assign({ value: id }, this.forkLabel(node.id, id)));
+          nextId = await this.ask(p.id, 'fork', { text: 'Embranchement ! Où vas-tu ?', options: opts }, () => pick(opts).value, (v) => opts.some((o) => o.value === v));
+        } else { nextId = ways[0]; if (ways.length < node.next.length) { const b = this.blocks.find((x) => x.from === node.id); this.say(b.icon + ' Le chemin est bloqué : ' + p.name + ' passe par l’autre côté.'); } }
       }
       p.pos = nextId; path.push(nextId); left--; p.stats.steps++;
       // Croiser des joueurs : Pickpocket / Chauvy
@@ -466,19 +530,23 @@ class Room {
   async shop(p) {
     const offer = shuffle(ITEM_KEYS.filter((k) => this.settings.gambling || k !== 'ticket')).slice(0, 5);
     const mult = (this.mods.sale ? 0.5 : 1) * (p.power === 'negociateur' ? 0.7 : 1);
-    const opts = offer.map((k) => ({ k, price: Math.max(1, Math.round(GAME.items[k].price * mult)) }));
-    if (this.settings.boosters) opts.push({ k: 'booster', price: Math.max(1, Math.round(GAME.booster.price * mult)) });
+    const disc = this.fam(p, 'pirate');
+    const opts = offer.map((k) => ({ k, price: Math.max(1, Math.round(GAME.items[k].price * mult) - disc) }));
+    if (this.settings.boosters) opts.push({ k: 'booster', price: Math.max(1, Math.round(GAME.booster.price * mult) - disc) });
+    const dieK = pick(['deux', 'petit', 'mini'].filter((d) => d !== p.die));
+    opts.push({ k: 'die', d: dieK, price: Math.max(1, Math.round(GAME.dice[dieK].price * mult) - disc) });
     const full = p.items.length >= this.bagSize(p);
     const affordable = opts.filter((o) => o.price <= p.coins);
-    const onlyBooster = full && this.settings.boosters && affordable.some((o) => o.k === 'booster');
+    const onlyBooster = full && affordable.some((o) => o.k === 'booster' || o.k === 'die');
     if ((full && !onlyBooster) || !affordable.length) { this.say('🛒 ' + p.name + ' passe devant la boutique' + (full ? ' (sac plein).' : ' (pas assez de ' + this.board.coin.name + ').')); return; }
     const fb = () => (p.bot && Math.random() < 0.6 ? pick(affordable).k : null);
     const k = await this.ask(p.id, 'shop', { text: 'Bienvenue à la boutique de Monstralia !', options: opts, sale: !!this.mods.sale, full }, fb, (v) => v === null || opts.some((o) => o.k === v && o.price <= p.coins));
     if (!k) return;
     const o = opts.find((x) => x.k === k);
-    if (k !== 'booster' && p.items.length >= this.bagSize(p)) return;
+    if (k !== 'booster' && k !== 'die' && p.items.length >= this.bagSize(p)) return;
     p.coins -= o.price; p.stats.shopSpent += o.price;
     if (k === 'booster') { this.broadcast(); await this.openBooster(p, 'acheté à la boutique'); return; }
+    if (k === 'die') { this.giveDie(p, o.d, '🛒 ' + p.name + ' achète le ' + GAME.dice[o.d].label + (p.die ? '' : '') + ' !'); this.broadcast(); await sleep(700); return; }
     this.giveItem(p, k, '🛒 ' + p.name + ' achète ' + GAME.items[k].icon + ' ' + GAME.items[k].name + '.');
     this.broadcast();
     await sleep(700);
@@ -497,11 +565,13 @@ class Room {
       await sleep(1200);
     }
     p.lastColor = ['red', 'special', 'chaos'].includes(node.t) ? 'red' : 'blue';
+    this.emit({ t: 'land', pid: p.id, tile: node.t });
     switch (process.env.FORCE_LAND && p.pos !== 0 ? process.env.FORCE_LAND : node.t) { // FORCE_LAND : réservé aux tests
-      case 'blue': p.stats.blue++; this.gain(p, (3 + (p.companion === 'rouxi' ? 2 : 0)) * m, p.name + ' gagne ' + this.money((3 + (p.companion === 'rouxi' ? 2 : 0)) * m) + '.'); break;
-      case 'red': p.stats.red++; this.lose(p, 3 * m, p.name + ' perd ' + this.money(3 * m) + '.'); break;
+      case 'blue': { p.stats.blue++; const n = (3 + (p.companion === 'rouxi' ? 2 : 0)) * m + this.fam(p, 'jurassique'); this.gain(p, n, p.name + ' gagne ' + this.money(n) + '.'); break; }
+      case 'red': { p.stats.red++; const n = Math.max(0, 3 * m - this.fam(p, 'mine')); if (n) this.lose(p, n, p.name + ' perd ' + this.money(n) + '.'); else this.say('⛏️ Le casque de ' + p.name + ' le protège : il ne perd rien !'); break; }
+      case 'trade': if (this.settings.boosters) await this.trade(p); else { const n = 3 * m; this.gain(p, n, p.name + ' gagne ' + this.money(n) + '.'); } break;
       case 'start': break;
-      case 'item': if (this.settings.boosters && Math.random() < 0.3) { await this.openBooster(p, 'trouvé sur une case cadeau'); break; } { const k = pick(CHEAP_ITEMS); this.giveItem(p, k, '🎁 ' + p.name + ' trouve ' + GAME.items[k].icon + ' ' + GAME.items[k].name + ' !'); await sleep(900); break; }
+      case 'item': if (this.settings.boosters && (process.env.FORCE_CARDS || Math.random() < 0.3)) { await this.openBooster(p, 'trouvé sur une case cadeau'); break; } { const k = pick(CHEAP_ITEMS); this.giveItem(p, k, '🎁 ' + p.name + ' trouve ' + GAME.items[k].icon + ' ' + GAME.items[k].name + ' !'); await sleep(900); break; }
       case 'shop': break; // déjà proposé en passant
       case 'nest': await this.nest(p); break;
       case 'tunnel': {
@@ -538,14 +608,36 @@ class Room {
   }
 
   /** Ouvre un booster de 3 cartes et applique les bonus. */
+  /** Applique l'effet d'une carte spéciale. */
+  applyCard(p, id) {
+    const c = CARDS[id];
+    switch (c.fx) {
+      case 'coins5': this.gain(p, 5); break;
+      case 'coins12': this.gain(p, 12); break;
+      case 'coins25': this.gain(p, 25); break;
+      case 'item': this.giveItem(p, pick(CHEAP_ITEMS)); break;
+      case 'dice2': p.buff += 2; break;
+      case 'dice5': p.buff += 5; break;
+      case 'shield': p.shield = true; break;
+      case 'companion': this.adopt(p, pick(COMP_KEYS.filter((k) => k !== p.companion))); break;
+      case 'steal': { const lead = this.ranking().find((o) => o !== p); if (lead) this.gain(p, this.lose(lead, 6), '🦝 Le raton voleur de ' + p.name + ' chipe des pièces à ' + lead.name + ' !'); break; }
+      default: if (c.fx && c.fx.indexOf('die:') === 0) this.giveDie(p, c.fx.slice(4), '🎲 ' + p.name + ' reçoit le ' + GAME.dice[c.fx.slice(4)].label + ' !'); break;
+      case 'lose5': this.lose(p, 5, '🕳️ Poche trouée ! ' + p.name + ' perd 5 pièces.'); break;
+      case 'slow2': p.buff -= 2; this.say('🐌 Escargot : ' + p.name + ' aura −2 à son prochain lancer.'); break;
+      case 'tax5': { const r = this.ranking(), last = r[r.length - 1]; if (last && last !== p) this.gain(last, this.lose(p, 5), '💸 Taxe du boss : ' + p.name + ' donne des pièces à ' + last.name + '.'); else this.say('💸 Taxe du boss… mais ' + p.name + ' est déjà dernier : il ne paie rien !'); break; }
+      case 'star': p.stars++; this.emit({ t: 'fx', kind: 'gotstar', pid: p.id }); this.say('🌠 ÉTOILE FILANTE ! ' + p.name + ' gagne une étoile grâce à sa carte légendaire !'); break;
+    }
+  }
+
   async openBooster(p, why) {
     const ids = Object.keys(CARDS);
     const draw = () => {
       let r = Math.random() * 100, rar = 'commune';
       for (const k of Object.keys(RARITY)) { r -= RARITY[k].weight; if (r <= 0) { rar = k; break; } }
-      return pick(ids.filter((id) => CARDS[id].rarity === rar));
+      const pool = ids.filter((id) => CARDS[id].rarity === rar);
+      return pick(pool.length ? pool : ids.filter((id) => CARDS[id].rarity === 'commune'));
     };
-    const got = [draw(), draw(), draw()];
+    const got = process.env.FORCE_CARDS ? process.env.FORCE_CARDS.split(',') : [draw(), draw(), draw()]; // FORCE_CARDS : tests
     p.stats.boosters++;
     this.say('🃏 ' + p.name + ' ouvre un booster' + (why ? ' (' + why + ')' : '') + ' !');
     this.emit({ t: 'booster', pid: p.id, cards: got });
@@ -553,22 +645,49 @@ class Room {
     for (const id of got) {
       p.cards.push(id);
       const c = CARDS[id];
-      switch (c.fx) {
-        case 'coins5': this.gain(p, 5); break;
-        case 'coins12': this.gain(p, 12); break;
-        case 'coins25': this.gain(p, 25); break;
-        case 'item': this.giveItem(p, pick(CHEAP_ITEMS)); break;
-        case 'dice2': p.buff += 2; break;
-        case 'dice5': p.buff += 5; break;
-        case 'shield': p.shield = true; break;
-        case 'companion': this.adopt(p, pick(COMP_KEYS.filter((k) => k !== p.companion))); break;
-        case 'steal': { const lead = this.ranking().find((o) => o !== p); if (lead) this.gain(p, this.lose(lead, 6), '🦝 Le raton voleur de ' + p.name + ' chipe des pièces à ' + lead.name + ' !'); break; }
-        case 'star': p.stars++; this.emit({ t: 'fx', kind: 'gotstar', pid: p.id }); this.say('🌠 ÉTOILE FILANTE ! ' + p.name + ' gagne une étoile grâce à sa carte légendaire !'); break;
-      }
+      if (!c.fx) continue;
+      if (c.rarity === 'maudite' || p.hand.length >= 5) this.applyCard(p, id); // les malus s'appliquent tout de suite
+      else { p.hand.push(id); this.say('🎒 ' + c.icon + ' ' + c.name + ' rangée dans le sac de ' + p.name + '.'); }
     }
-    p.stats.cards = new Set(p.cards).size;
+    this.checkFamilies(p);
     this.broadcast();
     await sleep(600);
+  }
+
+  /** Case Troc : proposer d'échanger une carte de famille avec un autre joueur, qui accepte ou refuse. */
+  async trade(p) {
+    const famCards = (q) => [...new Set(q.cards.filter((id) => CARDS[id] && CARDS[id].fam))];
+    const count = (q, id) => q.cards.filter((x) => x === id).length;
+    const mine = famCards(p);
+    const others = this.players.filter((o) => o !== p && famCards(o).length).map((o) => ({ pid: o.id, cards: famCards(o) }));
+    if (!mine.length || !others.length) { this.say('🔁 Case Troc ! Mais ' + (mine.length ? 'personne d’autre n’a de cartes' : p.name + ' n’a pas encore de carte de famille') + '. Il gagne 3 pièces.'); this.gain(p, 3); await sleep(1200); return; }
+    // Choix automatique (robots, ou si le temps est écoulé) : prendre une carte qui manque, donner un doublon
+    const auto = () => {
+      const give = mine.slice().sort((a, b) => count(p, b) - count(p, a))[0];
+      const opts = [];
+      others.forEach((o) => o.cards.forEach((id) => { if (!p.cards.includes(id)) opts.push({ pid: o.pid, take: id, w: famLevel(p.cards.concat(id), CARDS[id].fam) * 3 + p.cards.filter((x) => CARDS[x] && CARDS[x].fam === CARDS[id].fam).length }); }));
+      if (!opts.length) return null;
+      opts.sort((a, b) => b.w - a.w);
+      const best = opts[0];
+      return best.take === give ? null : { pid: best.pid, take: best.take, give };
+    };
+    this.say('🔁 Case Troc ! ' + p.name + ' peut proposer un échange de cartes.');
+    const v = await this.ask(p.id, 'trade', { text: 'Case Troc ! Choisis une carte à prendre chez un joueur et une des tiennes à lui donner.', mine, others }, () => (p.bot ? auto() : null),
+      (x) => x === null || (x && mine.includes(x.give) && others.some((o) => o.pid === x.pid && o.cards.includes(x.take))));
+    if (!v) { this.say('🔁 ' + p.name + ' ne propose rien.'); await sleep(700); return; }
+    const t = this.player(v.pid);
+    const G = CARDS[v.give], T = CARDS[v.take];
+    // L'autre accepte s'il y gagne (carte qui lui manque) ou si c'est un doublon chez lui
+    const fair = () => (!t.cards.includes(v.give) || count(t, v.take) > 1) && Math.random() < 0.85;
+    const ok = await this.ask(t.id, 'tradeok', { text: p.name + ' te propose un troc', from: p.id, give: v.give, take: v.take }, fair, (x) => typeof x === 'boolean', 20000);
+    if (!ok) { this.say('🙅 ' + t.name + ' refuse le troc de ' + p.name + '.'); await sleep(1000); return; }
+    p.cards.splice(p.cards.indexOf(v.give), 1); t.cards.push(v.give);
+    t.cards.splice(t.cards.indexOf(v.take), 1); p.cards.push(v.take);
+    this.emit({ t: 'banner', text: '🔁 Troc ! ' + p.name + ' donne « ' + G.name + ' » et reçoit « ' + T.name + ' » de ' + t.name });
+    this.say('🤝 ' + p.name + ' et ' + t.name + ' échangent leurs cartes.');
+    this.checkFamilies(p); this.checkFamilies(t);
+    this.broadcast();
+    await sleep(1800);
   }
 
   /** Casino : le joueur choisit un jeu et sa mise (5, 10 ou 20). */
@@ -691,10 +810,10 @@ class Room {
       { label: 'donne 10 ' + C + ' à', run: () => this.gain(b, this.lose(a, 10)) },
       { label: 'donne 20 ' + C + ' à', run: () => this.gain(b, this.lose(a, 20)) },
       { label: 'donne la moitié de ses ' + C + ' à', run: () => this.gain(b, this.lose(a, Math.floor(a.coins / 2))) },
-      { label: 'donne 1 étoile à', run: () => { if (this.canLoseStar(a)) { a.stars--; b.stars++; this.emit({ t: 'fx', kind: 'gotstar', pid: b.id }); } else this.say('Raté, pas d’étoile à prendre !'); } },
+      { star: true, label: 'donne 1 étoile à', run: () => { if (this.canLoseStar(a)) { a.stars--; b.stars++; this.emit({ t: 'fx', kind: 'gotstar', pid: b.id }); } else this.say('Raté, pas d’étoile à prendre !'); } },
       { label: 'échange ses ' + C + ' avec', run: () => { const x = a.coins; a.coins = b.coins; b.coins = x; } },
-      { label: 'échange ses étoiles avec', run: () => { const x = a.stars; a.stars = b.stars; b.stars = x; } },
-    ];
+      { star: true, label: 'échange ses étoiles avec', run: () => { if (Math.abs(a.stars - b.stars) > 2) { const [hi, lo] = a.stars > b.stars ? [a, b] : [b, a]; if (this.canLoseStar(hi)) { hi.stars--; lo.stars++; } this.say('Trop d’écart : ' + hi.name + ' donne seulement 1 étoile à ' + lo.name + '.'); } else { const x = a.stars; a.stars = b.stars; b.stars = x; } } },
+    ].filter((e) => !e.star || this.turn >= 3); // pas de vol d'étoile avant le tour 3
     const i = rand(0, effects.length - 1);
     this.say('🎲 Case Chance ! Qui va donner quoi à qui ?');
     await this.roulette('🎲 Chance !', effects.map((e) => e.label), i, a.name + ' ' + effects[i].label + ' ' + b.name + ' !');
@@ -725,8 +844,17 @@ class Room {
   }
 
   /* ---------------- Mini-jeux ---------------- */
+  teamTotals() {
+    return ['A', 'B'].map((t) => { const m = this.players.filter((p) => p.team === t); return { team: t, stars: m.reduce((a, p) => a + p.stars, 0), coins: m.reduce((a, p) => a + p.coins, 0), members: m.map((p) => p.id) }; }).sort((a, b) => b.stars - a.stars || b.coins - a.coins);
+  }
   chooseMode() {
     const N = this.players.length;
+    if (this.settings.teams) {
+      const r = Math.random();
+      if (r < 0.65) return { mode: 'teams', A: this.players.filter((p) => p.team === 'A').map((p) => p.id), B: this.players.filter((p) => p.team === 'B').map((p) => p.id) };
+      if (r < 0.85) return { mode: 'ffa', A: [], B: [] };
+      return { mode: 'coop', A: this.players.map((p) => p.id), B: [] };
+    }
     const blue = this.players.filter((p) => p.lastColor !== 'red'), red = this.players.filter((p) => p.lastColor === 'red');
     if (N >= 3 && (blue.length === 1 || red.length === 1)) { const solo = blue.length === 1 ? blue : red; return { mode: '1vx', A: solo.map((p) => p.id), B: this.players.filter((p) => p !== solo[0]).map((p) => p.id) }; }
     if (N >= 4 && blue.length >= 2 && red.length >= 2) return { mode: 'teams', A: blue.map((p) => p.id), B: red.map((p) => p.id) };
@@ -759,6 +887,7 @@ class Room {
     this.broadcast();
     await sleep(3000);
     const ctx = {
+      skill: { easy: 0.6, normal: 1, hard: 1.35 }[this.settings.bots] || 1,
       room: this, players: this.players, mode: choice.mode, teams, sleep, wait, rand, pick, shuffle, board: this.board, SPEED,
       later: (ms, fn) => setTimeout(fn, ms * SPEED),
       set: (pub) => { Object.assign(this.mg.pub, pub); this.broadcast(); },
@@ -784,6 +913,7 @@ class Room {
       if (win && p.companion === 'bzz') n += 3;
       if (win && p.power === 'champion') n += 3;
       if (!win && p.companion === 'bzz') n += 3;
+      n += this.fam(p, 'ville');
       p.coins += n; p.stats.earned += n;
       if (win) p.stats.mgWins++;
       return n;
@@ -792,8 +922,9 @@ class Room {
     if (choice.mode === 'ffa') {
       const list = this.players.map((p) => ({ p, s: res.scores[p.id] })).sort((a, b) => b.s - a.s);
       const rewards = [10, 7, 5, 3, 2, 1, 1, 0];
+      const lastP = this.players.find((q) => this.isLast(q)); // consolation : le dernier au classement qui finit sur le podium
       let place = 0;
-      list.forEach((x, i) => { if (i > 0 && x.s < list[i - 1].s) place = i; rows.push({ pid: x.p.id, place: place + 1, show: show(x.p.id), coins: pay(x.p, rewards[place], place === 0) }); });
+      list.forEach((x, i) => { if (i > 0 && x.s < list[i - 1].s) place = i; const extra = x.p === lastP && place < 3 && this.players.length > 2 ? 2 : 0; rows.push({ pid: x.p.id, place: place + 1, show: show(x.p.id) + (extra ? ' (+2 consolation)' : ''), coins: pay(x.p, rewards[place] + extra, place === 0) }); });
       return { rows, verdict: '' };
     }
     if (choice.mode === 'coop') {
@@ -825,7 +956,7 @@ class Room {
     if (this.settings.bonus) {
       const keys = shuffle(Object.keys(GAME.awards));
       for (const k of keys) {
-        if (awards.length >= 3) break;
+        if (awards.length >= (this.settings.turns <= 10 ? 2 : 3)) break; // parties courtes : 2 étoiles bonus
         const a = GAME.awards[k];
         const vals = this.players.map((p) => p.stats[a.stat] || 0);
         const best = a.dir > 0 ? Math.max(...vals) : Math.min(...vals);
@@ -837,8 +968,9 @@ class Room {
       }
     }
     const ranking = this.ranking().map((p) => p.id);
-    this.endInfo = { awards, ranking };
-    this.emit({ t: 'end', awards, ranking });
+    const teams = this.settings.teams ? this.teamTotals() : null;
+    this.endInfo = { awards, ranking, teams };
+    this.emit({ t: 'end', awards, ranking, teams });
     this.broadcast();
   }
 }
@@ -851,7 +983,7 @@ attach(server, (client) => {
     if (p.client && p.client !== client) p.client.close();
     room = r; me = p; p.client = client; r.emptySince = null;
     client.send({ t: 'joined', code: r.code, token: p.token, you: p.id });
-    if (r.endInfo && r.phase === 'end') client.send({ t: 'end', awards: r.endInfo.awards, ranking: r.endInfo.ranking });
+    if (r.endInfo && r.phase === 'end') client.send({ t: 'end', awards: r.endInfo.awards, ranking: r.endInfo.ranking, teams: r.endInfo.teams });
     r.broadcast();
   };
   client.on('message', (m) => {
@@ -883,6 +1015,11 @@ attach(server, (client) => {
         if (room.phase !== 'lobby') return;
         if (!CHARACTERS.some((c) => c.id === m.char) || room.players.some((p) => p.char === m.char && p !== me)) return;
         me.char = m.char; room.broadcast(); break;
+      case 'team': {
+        if (!isHost || room.phase !== 'lobby') return;
+        const t = room.player(m.pid); if (!t) return;
+        t.team = t.team === 'B' ? 'A' : 'B'; room.broadcast(); break;
+      }
       case 'power':
         if (room.phase !== 'lobby' || !GAME.powers[m.power]) return;
         me.power = m.power; room.broadcast(); break;
@@ -899,6 +1036,8 @@ attach(server, (client) => {
         if (typeof m.bonus === 'boolean') s.bonus = m.bonus;
         if (typeof m.gambling === 'boolean') s.gambling = m.gambling;
         if (typeof m.boosters === 'boolean') s.boosters = m.boosters;
+        if (['easy', 'normal', 'hard'].includes(m.bots)) s.bots = m.bots;
+        if (typeof m.teams === 'boolean') s.teams = m.teams;
         room.broadcast(); break;
       }
       case 'addbot': {

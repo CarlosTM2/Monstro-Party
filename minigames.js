@@ -10,20 +10,25 @@ const result = (ctx, fn) => { const scores = {}, shows = {}; ctx.players.forEach
 const fmtS = (ms) => (ms / 1000).toFixed(2).replace('.', ',') + ' s';
 
 /* ---------- Circuit de kart (le même pour tout le monde) ---------- */
+// Circuits : forme (fonction de t), nom et ambiance (couleurs, décor).
+const TRACKS = [
+  { name: 'Ovale de Monstralia', ground: '#4d7c0f', road: '#475569', deco: ['🌳', '🌲', '🌼'], f: (t) => [500 + 390 * Math.cos(t) - 30 * Math.cos(2 * t), 350 + 240 * Math.sin(t) + 35 * Math.sin(3 * t)] },
+  { name: 'Anneau de Méga City', ground: '#312e81', road: '#1f2937', deco: ['🏢', '🏙️', '🚦'], f: (t) => { const c = Math.cos(t), s = Math.sin(t); return [500 + 390 * Math.sign(c) * Math.pow(Math.abs(c), 0.6), 350 + 245 * Math.sign(s) * Math.pow(Math.abs(s), 0.6)]; } },
+  { name: 'Grand Huit', ground: '#15803d', road: '#52525b', deco: ['🎡', '🎢', '🌳'], f: (t) => [500 + 400 * Math.sin(t), 350 + 250 * Math.sin(t) * Math.cos(t) * 1.6] },
+  { name: 'Trèfle du Volcan', ground: '#7c2d12', road: '#292524', deco: ['🌋', '🔥', '🪨'], f: (t) => { const r = 1 + 0.2 * Math.cos(3 * t); return [500 + 330 * r * Math.cos(t), 360 + 245 * r * Math.sin(t)]; } },
+  { name: 'Étoile du Désert', ground: '#d97706', road: '#78350f', deco: ['🌵', '🦂', '🐪'], f: (t) => { const r = 1 + 0.13 * Math.cos(5 * t); return [500 + 360 * r * Math.cos(t), 350 + 250 * r * Math.sin(t)]; } },
+  { name: 'Cacahuète des Mines', ground: '#44403c', road: '#57534e', deco: ['⛏️', '💎', '🪨'], f: (t) => { const r = 1 + 0.32 * Math.cos(2 * t); return [500 + 320 * r * Math.cos(t), 350 + 290 * r * Math.sin(t) * 0.82]; } },
+  { name: 'Côte des Pirates', ground: '#0369a1', road: '#a16207', deco: ['🌴', '⛵', '🐚'], f: (t) => [500 + 380 * Math.cos(t) + 50 * Math.sin(2 * t), 350 + 225 * Math.sin(t) + 45 * Math.cos(3 * t)] },
+  { name: 'Glacier Glissant', ground: '#bae6fd', road: '#64748b', deco: ['⛄', '🌨️', '🐧'], f: (t) => { const r = 1 + 0.12 * Math.sin(4 * t); return [500 + 395 * r * Math.cos(t), 350 + 225 * r * Math.sin(t)]; }, ice: true },
+];
 function makeTrack(variant) {
+  const T = TRACKS[variant % TRACKS.length];
   const pts = [];
   const N = 180;
-  for (let i = 0; i < N; i++) {
-    const t = (i / N) * Math.PI * 2;
-    let x, y;
-    if (variant === 1) { const c = Math.cos(t), s = Math.sin(t); x = 500 + 390 * Math.sign(c) * Math.pow(Math.abs(c), 0.6); y = 350 + 245 * Math.sign(s) * Math.pow(Math.abs(s), 0.6); } // rectangle arrondi
-    else if (variant === 2) { x = 500 + 400 * Math.sin(t); y = 350 + 250 * Math.sin(t) * Math.cos(t) * 1.6; } // huit
-    else { x = 500 + 390 * Math.cos(t) - 30 * Math.cos(2 * t); y = 350 + 240 * Math.sin(t) + 35 * Math.sin(3 * t); }
-    pts.push([Math.round(x), Math.round(y)]);
-  }
+  for (let i = 0; i < N; i++) { const p = T.f((i / N) * Math.PI * 2); pts.push([Math.round(p[0]), Math.round(p[1])]); }
   const cum = [0];
   for (let i = 1; i <= N; i++) { const a = pts[i - 1], b = pts[i % N]; cum.push(cum[i - 1] + Math.hypot(b[0] - a[0], b[1] - a[1])); }
-  return { pts, cum, len: cum[N], w: 84, N };
+  return { pts, cum, len: cum[N], w: 84, N, name: T.name, ground: T.ground, road: T.road, deco: T.deco, ice: !!T.ice, variant: variant % TRACKS.length };
 }
 function trackAt(tr, dist) {
   const d = ((dist % tr.len) + tr.len) % tr.len;
@@ -40,7 +45,7 @@ module.exports = {
       ctx.set({ phase: 'wait' });
       await ctx.sleep(ctx.rand(2000, 5000));
       ctx.set({ phase: 'go' });
-      bots(ctx).forEach((b) => { const ms = ctx.rand(230, 560); ctx.later(ms, () => { if (!ctx.inputs[b.id]) ctx.inputs[b.id] = { ms }; }); });
+      bots(ctx).forEach((b) => { const ms = Math.round(ctx.rand(230, 560) / ctx.skill); ctx.later(ms, () => { if (!ctx.inputs[b.id]) ctx.inputs[b.id] = { ms }; }); });
       await until(ctx, 3000, () => ctx.players.every((p) => ctx.inputs[p.id]));
       return result(ctx, (p) => { const r = ctx.inputs[p.id]; if (!r) return [-2500, 'Trop lent']; if (r.early) return [-3000, 'Faux départ !']; return [-r.ms, r.ms + ' ms']; });
     },
@@ -63,7 +68,7 @@ module.exports = {
     rules: 'Le chrono démarre puis disparaît au bout de 3 secondes. Arrête-le le plus près possible de 7,00 secondes !',
     async play(ctx) {
       ctx.set({ phase: 'play', target: 7000, hideAfter: 3000 });
-      bots(ctx).forEach((b) => { const ms = 7000 + ctx.rand(-800, 800); ctx.later(ms, () => { ctx.inputs[b.id] = { ms }; }); });
+      bots(ctx).forEach((b) => { const ms = 7000 + Math.round(ctx.rand(-800, 800) / ctx.skill); ctx.later(ms, () => { ctx.inputs[b.id] = { ms }; }); });
       await until(ctx, 13000, () => ctx.players.every((p) => ctx.inputs[p.id]));
       return result(ctx, (p) => { const r = ctx.inputs[p.id]; return r ? [-Math.abs(r.ms - 7000), fmtS(r.ms)] : [-7000, 'Pas arrêté']; });
     },
@@ -84,7 +89,7 @@ module.exports = {
       const t0 = Date.now();
       ctx.room.mg.t0 = t0;
       ctx.set({ phase: 'answer', items: [] });
-      bots(ctx).forEach((b) => { const n = Math.random() < 0.4 ? good : good + ctx.rand(-2, 2); ctx.later(ctx.rand(2500, 6000), () => { if (!ctx.inputs[b.id]) ctx.inputs[b.id] = { n, ms: Date.now() - t0 }; }); });
+      bots(ctx).forEach((b) => { const n = Math.random() < Math.min(0.85, 0.4 * ctx.skill) ? good : good + ctx.rand(-2, 2); ctx.later(ctx.rand(2500, 6000), () => { if (!ctx.inputs[b.id]) ctx.inputs[b.id] = { n, ms: Date.now() - t0 }; }); });
       await until(ctx, 9500, () => ctx.players.every((p) => ctx.inputs[p.id]));
       ctx.set({ answer: good });
       return result(ctx, (p) => {
@@ -121,16 +126,16 @@ module.exports = {
     name: 'Monstro Kart', icon: '🏎️', modes: ['ffa', 'teams', '1vx'],
     rules: '2 tours de circuit ! Ton kart accélère tout seul : tourne avec ◀ ▶ (ou les flèches du clavier). Sortir de la piste te ralentit.',
     async play(ctx) {
-      const variant = ctx.rand(0, 2);
+      const variant = ctx.rand(0, TRACKS.length - 1);
       const tr = makeTrack(variant);
       const LAPS = 2;
       const karts = {};
       const grid = ctx.players.map((p, i) => p.id);
       grid.forEach((pid, i) => { const s = trackAt(tr, -12 - i * 26); karts[pid] = { x: Math.round(s.x), y: Math.round(s.y), a: s.a, prog: 0, fin: null, slot: i }; });
       const botSpeed = {};
-      bots(ctx).forEach((b) => { botSpeed[b.id] = 175 + Math.random() * 45; });
+      bots(ctx).forEach((b) => { botSpeed[b.id] = (175 + Math.random() * 45) * (0.7 + 0.3 * ctx.skill); });
       ctx.room.mg.track = tr;
-      ctx.set({ phase: 'race', track: { pts: tr.pts, w: tr.w, laps: LAPS, N: tr.N }, karts, startAt: Date.now() });
+      ctx.set({ phase: 'race', track: { pts: tr.pts, w: tr.w, laps: LAPS, N: tr.N, name: tr.name, ground: tr.ground, road: tr.road, deco: tr.deco, ice: tr.ice, variant: tr.variant }, karts, startAt: Date.now() });
       const t0 = Date.now();
       const botDist = {}; bots(ctx).forEach((b) => { botDist[b.id] = -12 - karts[b.id].slot * 26; });
       while (Date.now() - t0 < 55000 * ctx.SPEED) {
@@ -169,6 +174,65 @@ module.exports = {
     },
   },
 
+  rink: {
+    name: 'Patinoire Givrée', icon: '⛸️', modes: ['ffa', 'teams', '1vx'],
+    rules: 'Glisse sur la glace et ramasse un maximum de gemmes en 40 secondes ! Gemme bleue = 1 point, gemme dorée = 3. Dirige ton Monstro en faisant glisser ton doigt (ou avec les flèches du clavier). Attention, ça glisse !',
+    async play(ctx) {
+      const R = 9.5, IN = 2.6, DUR = 40000;
+      const mg = ctx.room.mg;
+      const skaters = {}, scores = {};
+      ctx.players.forEach((p, i) => { const a = (i / ctx.players.length) * Math.PI * 2; skaters[p.id] = { x: +(Math.cos(a) * 6).toFixed(2), z: +(Math.sin(a) * 6).toFixed(2), a: a + Math.PI }; scores[p.id] = 0; });
+      let gid = 0; const gems = [];
+      const spawn = () => { const r = Math.sqrt(ctx.rand(0, 1000) / 1000) * (R - 1.2 - IN - 0.4) + IN + 0.4, a = Math.random() * Math.PI * 2; gems.push({ id: ++gid, x: +(Math.cos(a) * r).toFixed(2), z: +(Math.sin(a) * r).toFixed(2), g: Math.random() < 0.15 ? 3 : 1 }); };
+      const want = 4 + ctx.players.length;
+      for (let i = 0; i < want; i++) spawn();
+      mg.pickups = [];
+      const take = (pid, gem) => { const i = gems.indexOf(gem); if (i < 0) return; gems.splice(i, 1); scores[pid] += gem.g; };
+      const t0 = Date.now();
+      ctx.set({ phase: 'rink', rink: { R, IN, dur: DUR }, skaters, gems, scores, startAt: t0 });
+      const bv = {}; bots(ctx).forEach((b) => { bv[b.id] = { vx: 0, vz: 0, sp: (1.5 + Math.random() * 0.4) * (0.6 + 0.4 * ctx.skill), tgt: null, next: 0 }; });
+      let last = Date.now();
+      while (Date.now() - t0 < DUR * ctx.SPEED) {
+        await ctx.wait(120);
+        const now = Date.now(), dt = Math.min(0.3, (now - last) / 1000 / ctx.SPEED); last = now;
+        bots(ctx).forEach((b) => {
+          const s = skaters[b.id], v = bv[b.id];
+          if (!gems.includes(v.tgt) || now > v.next) { // hésite un peu avant de changer de cible
+            let bd = 1e9; v.tgt = null; gems.forEach((g) => { const d = Math.hypot(g.x - s.x, g.z - s.z) / (g.g === 3 ? 1.6 : 1) + Math.random() * 3 / ctx.skill; if (d < bd) { bd = d; v.tgt = g; } });
+            v.next = now + (700 + Math.random() * 900) / ctx.skill * ctx.SPEED;
+          }
+          const best = v.tgt;
+          if (best) { const dx = best.x - s.x, dz = best.z - s.z, L = Math.hypot(dx, dz) || 1; v.vx += (dx / L * v.sp - v.vx) * Math.min(1, dt * 1.4); v.vz += (dz / L * v.sp - v.vz) * Math.min(1, dt * 1.4); }
+          s.x += v.vx * dt; s.z += v.vz * dt;
+          const r = Math.hypot(s.x, s.z);
+          if (r > R - 0.6) { s.x *= (R - 0.6) / r; s.z *= (R - 0.6) / r; v.vx *= -0.4; v.vz *= -0.4; }
+          if (r < IN) { s.x *= IN / (r || 1); s.z *= IN / (r || 1); }
+          s.a = Math.atan2(v.vx, v.vz); s.m = 1;
+          s.x = +s.x.toFixed(2); s.z = +s.z.toFixed(2);
+          gems.slice().forEach((g) => { if (Math.hypot(g.x - s.x, g.z - s.z) < 0.85) take(b.id, g); });
+        });
+        ctx.players.filter((p) => !p.bot).forEach((p) => { const r = ctx.inputs[p.id]; if (r) Object.assign(skaters[p.id], { x: r.x, z: r.z, a: r.a, m: r.m }); });
+        mg.pickups.splice(0).forEach(({ pid, id }) => { const g = gems.find((x) => x.id === id), s = skaters[pid]; if (g && s && Math.hypot(g.x - s.x, g.z - s.z) < 1.6) take(pid, g); });
+        while (gems.length < want) spawn();
+        ctx.set({ skaters, gems, scores });
+      }
+      ctx.set({ phase: 'done' });
+      await ctx.wait(400);
+      return result(ctx, (p) => [scores[p.id], scores[p.id] + ' point' + (scores[p.id] > 1 ? 's' : '')]);
+    },
+    input(mg, pid, d) {
+      if (mg.pub.phase !== 'rink') return;
+      const R = mg.pub.rink.R;
+      if (typeof d.x === 'number' && typeof d.z === 'number') {
+        const prev = mg.inputs[pid], now = Date.now();
+        let x = clamp(d.x, -R, R), z = clamp(d.z, -R, R);
+        if (prev && prev.t) { const dt = (now - prev.t) / 1000, L = Math.hypot(x - prev.x, z - prev.z), mx = 9 * dt + 0.6; if (L > mx) { x = prev.x + (x - prev.x) * mx / L; z = prev.z + (z - prev.z) * mx / L; } } // pas de téléportation
+        mg.inputs[pid] = { x: +x.toFixed(2), z: +z.toFixed(2), a: +d.a || 0, m: d.m ? 1 : 0, t: now };
+      }
+      if (typeof d.gem === 'number') (mg.pickups || (mg.pickups = [])).push({ pid, id: d.gem });
+    },
+  },
+
   ballons: {
     name: 'Ballons Pop', icon: '🎈', modes: ['ffa', 'teams', '1vx'],
     rules: 'Des ballons apparaissent : éclate-les avant les autres ! Les ballons dorés valent 3 points, les bombes t’en retirent 2.',
@@ -187,7 +251,7 @@ module.exports = {
         balloons.push({ id: ++id, x: ctx.rand(6, 90), y: ctx.rand(8, 82), k: kind, born: now });
         bots(ctx).forEach((b) => {
           if (now < botNext[b.id]) return;
-          botNext[b.id] = now + ctx.rand(700, 1500) * ctx.SPEED;
+          botNext[b.id] = now + ctx.rand(700, 1500) / ctx.skill * ctx.SPEED;
           const target = balloons.filter((x) => x.k !== 'bomb' || Math.random() < 0.15)[0];
           if (target) popBalloon(ctx.room.mg, b.id, target.id);
         });
@@ -218,7 +282,7 @@ module.exports = {
           const h = ctx.room.mg.holder;
           const hp = ctx.players.find((p) => p.id === h);
           if (hp && hp.bot) {
-            if (!botAt) botAt = Date.now() + ctx.rand(400, 1600) * ctx.SPEED;
+            if (!botAt) botAt = Date.now() + ctx.rand(400, 1600) / ctx.skill * ctx.SPEED;
             if (Date.now() >= botAt) { passBomb(ctx.room.mg, h); botAt = 0; ctx.set({ holder: ctx.room.mg.holder }); }
           } else botAt = 0;
           if (ctx.room.mg.holder !== ctx.pub_holder) { ctx.pub_holder = ctx.room.mg.holder; ctx.set({ holder: ctx.room.mg.holder }); }
@@ -243,7 +307,7 @@ module.exports = {
       await ctx.sleep(650 * len + 900);
       const t0 = Date.now(); ctx.room.mg.t0 = t0; ctx.room.mg.seq = seq;
       ctx.set({ phase: 'input', seq: null });
-      bots(ctx).forEach((b) => { const ok = Math.random() < 0.5 ? len : ctx.rand(2, len - 1); ctx.later(ctx.rand(4000, 9000), () => { ctx.inputs[b.id] = { ok, ms: Date.now() - t0 }; }); });
+      bots(ctx).forEach((b) => { const ok = Math.random() < Math.min(0.9, 0.5 * ctx.skill) ? len : ctx.rand(2, len - 1); ctx.later(ctx.rand(4000, 9000), () => { ctx.inputs[b.id] = { ok, ms: Date.now() - t0 }; }); });
       await until(ctx, 15000, () => ctx.players.every((p) => ctx.inputs[p.id]));
       ctx.set({ answer: seq });
       return result(ctx, (p) => { const r = ctx.inputs[p.id]; if (!r) return [0, 'Pas fini']; return [r.ok * 1000 - Math.min(999, r.ms / 20), r.ok + ' / ' + len + (r.ok === len ? ' ✔' : '')]; });
@@ -261,7 +325,7 @@ module.exports = {
     async play(ctx) {
       const A = ctx.teams.A, B = ctx.teams.B;
       ctx.players.forEach((p) => { ctx.inputs[p.id] = { count: 0, start: Date.now() }; });
-      const rate = {}; bots(ctx).forEach((b) => { rate[b.id] = 5 + Math.random() * 4; });
+      const rate = {}; bots(ctx).forEach((b) => { rate[b.id] = (5 + Math.random() * 4) * ctx.skill; });
       let pos = 0;
       ctx.set({ phase: 'play', pos, dur: 10000 * ctx.SPEED });
       const t0 = Date.now(); let last = {}; ctx.players.forEach((p) => { last[p.id] = 0; });
@@ -312,7 +376,7 @@ module.exports = {
     async play(ctx) {
       const target = ctx.players.length * 58;
       ctx.players.forEach((p) => { ctx.inputs[p.id] = { count: 0, start: Date.now() }; });
-      const rate = {}; bots(ctx).forEach((b) => { rate[b.id] = 6 + Math.random() * 3; });
+      const rate = {}; bots(ctx).forEach((b) => { rate[b.id] = (6 + Math.random() * 3) * ctx.skill; });
       ctx.set({ phase: 'play', target, total: 0, dur: 8000 * ctx.SPEED });
       const t0 = Date.now(); let total = 0;
       while (Date.now() - t0 < 8000 * ctx.SPEED) {
@@ -332,7 +396,7 @@ module.exports = {
     rules: 'Tous ensemble ! Arrêtez votre chrono à 5,00 secondes (il disparaît après 2 s). Si l’écart moyen est sous 0,40 s, tout le monde gagne 10 pièces.',
     async play(ctx) {
       ctx.set({ phase: 'play', target: 5000, hideAfter: 2000 });
-      bots(ctx).forEach((b) => { const ms = 5000 + ctx.rand(-450, 450); ctx.later(ms, () => { ctx.inputs[b.id] = { ms }; }); });
+      bots(ctx).forEach((b) => { const ms = 5000 + Math.round(ctx.rand(-450, 450) / ctx.skill); ctx.later(ms, () => { ctx.inputs[b.id] = { ms }; }); });
       await until(ctx, 11000, () => ctx.players.every((p) => ctx.inputs[p.id]));
       const errs = ctx.players.map((p) => (ctx.inputs[p.id] ? Math.abs(ctx.inputs[p.id].ms - 5000) : 5000));
       const mean = errs.reduce((a, b) => a + b, 0) / errs.length;
@@ -346,7 +410,7 @@ module.exports = {
 async function mash(ctx, dur) {
   const counts = {};
   ctx.players.forEach((p) => { counts[p.id] = 0; ctx.inputs[p.id] = { count: 0, start: Date.now() }; });
-  const rates = {}; bots(ctx).forEach((b) => { rates[b.id] = 5 + Math.random() * 4; });
+  const rates = {}; bots(ctx).forEach((b) => { rates[b.id] = (5 + Math.random() * 4) * ctx.skill; });
   ctx.set({ phase: 'play', dur: dur * ctx.SPEED, counts });
   const t0 = Date.now();
   while (Date.now() - t0 < dur * ctx.SPEED) {
@@ -380,4 +444,4 @@ function passBomb(mg, pid) {
   mg.holder = others[Math.floor(Math.random() * others.length)];
   mg.passAt = Date.now();
 }
-module.exports._track = { makeTrack, trackAt };
+module.exports._track = { makeTrack, trackAt, TRACKS };

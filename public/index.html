@@ -73,6 +73,8 @@
           <div class="set"><span>Étoiles bonus à la fin</span><div id="bonusChoice" class="seg"></div></div>
           <div class="set"><span>Jeux d’argent (casino, paris)</span><div id="gamblingChoice" class="seg"></div></div>
           <div class="set"><span>Boosters de cartes</span><div id="boosterChoice" class="seg"></div></div>
+          <div class="set"><span>Niveau des robots</span><div id="botsChoice" class="seg"></div></div>
+          <div class="set"><span>Équipes (2 contre 2, 3 contre 3…)</span><div id="teamsChoice" class="seg"></div></div>
         </div>
         <div id="powerPick" class="hidden"><div class="lbl">Ton pouvoir</div><div id="powerGrid" class="power-grid"></div></div>
       </div>
@@ -89,10 +91,10 @@
   <section id="game" class="screen hidden">
     <header class="gbar">
       <div id="gTitle" class="gtitle"></div>
-      <div class="gright"><button id="btnAlbum" class="btn small ghost hidden">🃏</button><button id="btnCam" class="btn small ghost hidden">🗺️ Vue d’ensemble</button><button class="btn small ghost btnHelp">📖</button><div id="gTurn" class="gturn"></div></div>
+      <div class="gright"><button id="btnBag" class="btn small ghost hidden" title="Mon sac">🎒</button><button id="btnAlbum" class="btn small ghost hidden">🃏</button><button id="btnCam" class="btn small ghost hidden">🗺️ Vue d’ensemble</button><button class="btn small ghost btnHelp">📖</button><div id="gTurn" class="gturn"></div></div>
     </header>
     <div class="gmain">
-      <div class="board-wrap"><canvas id="board"></canvas><div id="fxLayer"></div></div>
+      <div class="board-wrap"><canvas id="board"></canvas><canvas id="board3d"></canvas><div id="fxLayer"></div></div>
       <aside id="side" class="side"></aside>
     </div>
     <div id="actionBar" class="action-bar"></div>
@@ -106,5 +108,6 @@
 </div>
 <script src="/boards.js"></script>
 <script src="/client.js"></script>
+<script type="module" src="/scene3d.js"></script>
 </body>
 </html>
