@@ -184,7 +184,7 @@
       '<h2>Jeux d’argent (option)</h2><div class="hgrid">' + Object.values(GAME.casino).map((d) => '<div><span class="hi">' + d.icon + '</span><b>' + esc(d.name) + '</b> : ' + esc(d.desc) + '</div>').join('') + '<div><span class="hi">💸</span><b>Paris sur les mini-jeux</b> : mise 5 ou 10 avant chaque mini-jeu. Chacun pour soi : ×3 si ton favori gagne. Équipes ou coopération : ×2.</div><div><span class="hi">🎟️</span><b>Ticket à gratter</b> : objet de la boutique (8 pièces), de 0 à 30 pièces.</div></div>' +
       '<h2>Boosters et cartes (option)</h2><p>Un booster (boutique : ' + GAME.booster.price + ' pièces, gagnant d’un mini-jeu chacun pour soi, ou case 🎁) contient 3 cartes. ' + Object.values(RARITY).map((r) => '<b style="color:' + r.color + '">' + r.name + '</b> ' + r.weight + ' %').join(' · ') + '. Les communes forment <b>4 familles de 5 cartes</b> : 3 cartes d’une famille donnent un petit bonus permanent, les 5 le doublent et rapportent 10 pièces. Sur une case 🔁 Troc, propose un échange de carte à un autre joueur (il accepte ou refuse).</p><div class="hgrid">' + Object.values(FAMILIES).map((F) => '<div><span class="hi">' + F.icon + '</span><b>' + esc(F.name) + '</b> : ' + esc(F.bonus[0]) + ' (les 5 : ' + esc(F.bonus[1]) + ')</div>').join('') + '</div><p>Les cartes spéciales vont dans ton sac 🎒 : à ton tour, tu peux en jouer une (en plus d’un objet) avant de lancer le dé. Sac limité à 5 cartes. Les cartes maudites (5 %) s’appliquent tout de suite.</p><div class="hgrid">' + Object.values(CARDS).filter((c) => c.fx).map((c) => '<div><span class="hi">' + c.icon + '</span><b style="color:' + RARITY[c.rarity].color + '">' + esc(c.name) + '</b> : ' + esc(c.desc) + '</div>').join('') + '</div>' +
       '<h2>Les objets (3 max dans le sac)</h2><div class="hgrid">' + Object.values(GAME.items).map((d) => '<div><span class="hi">' + d.icon + '</span><b>' + esc(d.name) + '</b> (' + d.price + ') : ' + esc(d.desc) + '</div>').join('') + '</div>' +
-      '<h2>Les compagnons (1 à la fois)</h2><div class="hgrid">' + Object.values(GAME.companions).map((d) => '<div><span class="hi">' + d.icon + '</span><b>' + esc(d.name) + '</b> : ' + esc(d.desc) + '</div>').join('') + '</div>' +
+      '<h2>Les compagnons (2 maximum : sur un nid, tu peux en échanger un)</h2><div class="hgrid">' + Object.values(GAME.companions).map((d) => '<div><span class="hi">' + d.icon + '</span><b>' + esc(d.name) + '</b> : ' + esc(d.desc) + '</div>').join('') + '</div>' +
       '<h2>Les pouvoirs (option)</h2><div class="hgrid">' + Object.values(GAME.powers).map((d) => '<div><span class="hi">' + d.icon + '</span><b>' + esc(d.name) + '</b> : ' + esc(d.desc) + '</div>').join('') + '</div>' +
       '<h2>Équipes (option)</h2><p>Bleus contre rouges : à la fin, on additionne les étoiles puis les pièces de chaque équipe. La plupart des mini-jeux se jouent alors en équipe.</p><h2>Événements de région</h2><p>De temps en temps, un chemin est bloqué pendant 2 tours : dino qui fait la sieste, marée haute, travaux ou éboulement. Les flèches ne proposent alors que le chemin libre.</p>' +
       '<h2>Étoiles bonus possibles (2 tirées au hasard en partie de 5 ou 10 tours, 3 au-delà)</h2><div class="hgrid">' + Object.values(GAME.awards).map((d) => '<div><span class="hi">' + d.icon + '</span><b>' + esc(d.name) + '</b> : ' + esc(d.desc) + '</div>').join('') + '</div></div>';
@@ -259,7 +259,7 @@
   function animTeleport(pid, to, fly, ride) {
     if (!S) return;
     const from = disp[pid] ? Object.assign({}, disp[pid]) : nodePos(to);
-    if (ride) { anims[pid] = { kind: 'fly', from, to: nodePos(to), t0: performance.now(), dur: 2400, fly: ride === 'ptero' || ride === 'heli', ride }; const p0 = S.players.find((p) => p.id === pid); if (p0) p0.pos = to; sfx.item(); return; }
+    if (ride) { anims[pid] = { kind: 'fly', from, to: nodePos(to), t0: performance.now(), dur: 2400, fly: ride === 'ptero' || ride === 'heli' || ride === 'bat', ride }; const p0 = S.players.find((p) => p.id === pid); if (p0) p0.pos = to; sfx.item(); return; }
     anims[pid] = { kind: 'fly', from, to: nodePos(to), t0: performance.now(), dur: fly ? 900 : 600, fly };
     const p0 = S.players.find((p) => p.id === pid); if (p0) p0.pos = to;
     if (!fly) { fxs.push({ kind: 'ring', x: from.x, y: from.y, z: from.z, t0: performance.now() }); if (USE3D) Scene3D.fx('ring', from); }
@@ -289,8 +289,8 @@
     setTimeout(() => d.remove(), 1500);
   }
 
-  const COL = { blue: '#3b82f6', red: '#ef4444', event: '#a855f7', item: '#06b6d4', shop: '#ec4899', nest: '#84cc16', chance: '#facc15', chaos: '#1e293b', special: '#f59e0b', tunnel: '#111827', start: '#ffffff', casino: '#15803d', trade: '#0d9488', boss: '#7f1d1d', shift: '#b45309' };
-  const ICON = { item: '🎁', shop: '🛒', nest: '🪺', chance: '🎲', chaos: '🌀', tunnel: '🕳️', casino: '🎰', trade: '🔁', boss: '😈', shift: '⚙️' };
+  const COL = { blue: '#3b82f6', red: '#ef4444', event: '#a855f7', item: '#06b6d4', shop: '#ec4899', nest: '#84cc16', chance: '#facc15', chaos: '#1e293b', special: '#f59e0b', tunnel: '#111827', start: '#ffffff', casino: '#15803d', trade: '#0d9488', boss: '#7f1d1d', shift: '#b45309', npc: '#a21caf' };
+  const ICON = { item: '🎁', shop: '🛒', nest: '🪺', chance: '🎲', chaos: '🌀', tunnel: '🕳️', casino: '🎰', trade: '🔁', boss: '😈', shift: '⚙️', npc: '🙂' };
   const SWAY = ['🌴', '🌿', '🍃', '🌾', '🪵'];
   const FLYERS = { jurassic: ['🦅', '🦋'], pirate: ['🦜', '🕊️'], heroes: ['🚁', '🦸'], mine: ['🦇', '🦇'] };
   const shadeC = (hex, f) => { const n = parseInt(hex.slice(1), 16); const ch = (v) => Math.max(0, Math.min(255, Math.round(f < 0 ? v * (1 + f) : v + (255 - v) * f))); return 'rgb(' + ch(n >> 16) + ',' + ch((n >> 8) & 255) + ',' + ch(n & 255) + ')'; };
@@ -369,7 +369,7 @@
         x.strokeStyle = n.t === 'start' ? '#3b0764' : 'rgba(255,255,255,.95)'; x.lineWidth = 2.5; x.stroke();
         if (n.t === 'event') { x.fillStyle = '#fff'; x.font = 'bold 17px Fredoka, sans-serif'; x.fillText('?', p.X, p.Y); }
         else if (n.t === 'special') { x.font = '16px serif'; x.fillText(B.special.icon, p.X, p.Y - 2); }
-        else if (ICON[n.t]) { x.font = '15px serif'; x.fillText(n.t === 'tunnel' && B.warp ? B.warp.icon : ICON[n.t], p.X, p.Y - 1); }
+        else if (ICON[n.t]) { x.font = '15px serif'; x.fillText(n.t === 'tunnel' && B.warp ? B.warp.icon : n.t === 'npc' && window.PARTY.NPCS[n.npc] ? window.PARTY.NPCS[n.npc].icon : ICON[n.t], p.X, p.Y - 1); }
         else if (n.t === 'start') { x.fillStyle = '#3b0764'; x.font = 'bold 11px Fredoka, sans-serif'; x.fillText('GO', p.X, p.Y); }
         else { x.fillStyle = 'rgba(255,255,255,.9)'; x.font = 'bold 14px Fredoka, sans-serif'; x.fillText(n.t === 'blue' ? '+' : '−', p.X, p.Y); }
       });
@@ -419,7 +419,7 @@
       const pv = playerViews(now);
       const pr = S.prompt;
       Scene3D.frame(now, {
-        board: B, players: pv, current: S.current, stars: S.stars, traps: S.traps, blocks: S.blocks, tide: S.tide, day: S.settings.theme === 'mine' ? 'jour' : (window.__day || window.PARTY.dayPhase(S.turn)),
+        board: B, players: pv, current: S.current, stars: S.stars, traps: S.traps, blocks: S.blocks, tide: S.tide, levis: window.PARTY.levisOpen(S.turn), day: S.settings.theme === 'mine' ? 'jour' : (window.__day || window.PARTY.dayPhase(S.turn, S.settings.theme)),
         fork: pr && pr.kind === 'fork' && pr.pid === ME ? pr.data.options : null, mePos: disp[ME],
         focus: focusP ? (disp[focusP.id] || nodePos(focusP.pos)) : null,
       });
@@ -608,7 +608,7 @@
     $('gTurn').textContent = S.phase === 'end' ? 'Fin !' : 'Tour ' + Math.max(1, S.turn) + ' / ' + S.settings.turns;
     let tp = $('turnPill'); if (!tp) { tp = document.createElement('div'); tp.id = 'turnPill'; tp.className = 'turn-pill'; document.querySelector('.board-wrap').appendChild(tp); }
     const DPI = { jour: '☀️', 'crépuscule': '🌇', nuit: '🌙', aube: '🌅' };
-    tp.innerHTML = S.phase === 'end' ? 'Fin !' : 'Tour<b>' + Math.max(1, S.turn) + '/' + S.settings.turns + '</b>' + (S.settings.theme !== 'mine' ? '<span class="dp" title="' + window.PARTY.dayPhase(S.turn) + '">' + DPI[window.PARTY.dayPhase(S.turn)] + '</span>' : '');
+    tp.innerHTML = S.phase === 'end' ? 'Fin !' : 'Tour<b>' + Math.max(1, S.turn) + '/' + S.settings.turns + '</b>' + (S.settings.theme !== 'mine' ? '<span class="dp" title="' + window.PARTY.dayPhase(S.turn, S.settings.theme) + '">' + DPI[window.PARTY.dayPhase(S.turn, S.settings.theme)] + '</span>' : '');
     let ob = $('orderBar'); if (!ob) { ob = document.createElement('div'); ob.id = 'orderBar'; ob.className = 'order-bar'; document.querySelector('.board-wrap').appendChild(ob); }
     ob.innerHTML = '<small>Ordre</small>' + S.players.map((p, i) => '<span class="ob' + (p.id === S.current ? ' cur' : '') + '" style="border-color:' + p.color + '" title="' + esc(p.name) + '">' + mini(p.char, 26) + '<i>' + (i + 1) + '</i></span>').join('');
     if (S.settings.market && S.market) {
@@ -626,7 +626,7 @@
     const tm = S.settings.teams ? ['A', 'B'].map((t) => { const m = S.players.filter((p) => p.team === t); return { t, st: m.reduce((a, p) => a + p.stars, 0), co: m.reduce((a, p) => a + p.coins, 0) }; }) : null;
     $('side').innerHTML = (tm ? '<div class="teambar">' + tm.map((x) => '<div class="tb tb' + x.t + '"><b>' + (x.t === 'A' ? '🔵 Bleus' : '🔴 Rouges') + '</b><span>' + starIcon() + ' ' + x.st + ' · ' + coinIcon() + ' ' + x.co + '</span></div>').join('') + '</div>' : '') + S.players.map((p) => '<div class="pc' + (S.settings.teams ? ' team' + p.team : '') + (p.id === S.current ? ' cur' : '') + (p.online ? '' : ' off') + '" style="border-color:' + p.color + '"><span class="rk">' + (rank.indexOf(p) + 1) + '<sup>' + (rank.indexOf(p) ? 'e' : 'er') + '</sup></span>' + svg(p.char) + '<div style="min-width:0;flex:1"><div class="nm">' + esc(p.name) + (p.id === ME ? ' (toi)' : '') + '</div><div class="st">' + starIcon() + ' ' + p.stars + ' &nbsp; ' + coinIcon() + ' ' + p.coins + '</div><div class="inv">' +
       (p.power ? '<span title="' + esc(GAME.powers[p.power].name + ' : ' + GAME.powers[p.power].desc) + '">' + GAME.powers[p.power].icon + '</span>' : '') +
-      (p.companion ? '<span title="' + esc(GAME.companions[p.companion].name + ' : ' + GAME.companions[p.companion].desc) + '">' + GAME.companions[p.companion].icon + '</span>' : '') +
+      (p.comps || []).map((k) => '<span title="' + esc(GAME.companions[k].name + ' : ' + GAME.companions[k].desc) + '">' + GAME.companions[k].icon + '</span>').join('') +
       (S.settings.boosters && p.cards && p.cards.length ? '<span class="sep">|</span><span title="Cartes différentes">🃏' + new Set(p.cards).size + '</span>' + Object.keys(FAMILIES).map((f) => { const l = famLevel(p.cards, f); return l ? '<span class="fam' + l + '" title="' + esc(FAMILIES[f].name + ' : ' + FAMILIES[f].bonus[l - 1]) + '">' + FAMILIES[f].icon + (l === 2 ? '★' : '') + '</span>' : ''; }).join('') : '') + (p.buff ? '<span title="Bonus au prochain dé">' + (p.buff < 0 ? '🐌' + p.buff : '👟+' + p.buff) + '</span>' : '') + (p.die ? '<span title="' + esc(GAME.dice[p.die].label + ' : ' + GAME.dice[p.die].desc) + '">' + GAME.dice[p.die].icon + (p.dieUses ? '<sub>' + p.dieUses + '</sub>' : '') + '</span>' : '') +
       (p.items.length ? '<span class="sep">|</span>' + p.items.map((k) => '<span title="' + esc(GAME.items[k].name) + '">' + ico(k, GAME.items[k].icon, 20) + '</span>').join('') : '') + '</div></div></div>').join('');
     renderPrompt(prev);
@@ -680,6 +680,8 @@
       } else if (pr.kind === 'tradeok') {
         const from = S.players.find((x) => x.id === d.from), G = CARDS[d.give], Tk = CARDS[d.take];
         html = '<span class="msg">🔁 <b>' + esc(from ? from.name : '') + '</b> te propose un troc : tu reçois <b>' + FAMILIES[G.fam].icon + ' ' + esc(G.name) + '</b>' + (me.cards.includes(d.give) ? ' (tu l’as déjà)' : ' (nouvelle !)') + ' contre ta carte <b>' + FAMILIES[Tk.fam].icon + ' ' + esc(Tk.name) + '</b>' + (me.cards.filter((x) => x === d.take).length > 1 ? ' (tu l’as en double)' : '') + '.</span><div class="opts"><button class="btn big" data-a="true">J’accepte</button><button class="btn big ghost" data-a="false">Non merci</button></div>';
+      } else if (pr.kind === 'choice') {
+        html = '<span class="msg">' + esc(d.text) + '</span><div class="opts">' + d.options.map((o) => '<button class="btn opt" data-a="' + A(o.value) + '"' + (o.disabled ? ' disabled' : '') + '>' + esc(o.label) + (o.small ? '<small>' + esc(o.small) + '</small>' : '') + '</button>').join('') + '<button class="btn ghost" data-a="null">Non merci</button></div>';
       } else if (pr.kind === 'number') {
         html = '<span class="msg">🎯 ' + esc(d.text) + '</span><div class="opts">' + Array.from({ length: d.max - d.min + 1 }, (_, i) => '<button class="btn numb" data-a="' + (d.min + i) + '">' + (d.min + i) + '</button>').join('') + '</div>';
       }
@@ -693,7 +695,7 @@
       tick(); promptTimer = setInterval(tick, 500);
       if (!prev || !prev.prompt || prev.prompt.pid !== ME) beep(660, 0.12, 'triangle', 0.06);
     } else if (cur) {
-      const what = pr && pr.pid === cur.id ? { turn: ' choisit son dé…', casino: ' hésite devant le casino…', fork: ' choisit son chemin…', buy: ' réfléchit à l’étoile…', shop: ' fait ses courses…', nest: ' regarde le nid…', target: ' choisit sa cible…', number: ' choisit son résultat…', trade: ' prépare un troc…', tradeok: ' réfléchit à un troc…' }[pr.kind] : ' joue…';
+      const what = pr && pr.pid === cur.id ? { turn: ' choisit son dé…', casino: ' hésite devant le casino…', fork: ' choisit son chemin…', buy: ' réfléchit à l’étoile…', shop: ' fait ses courses…', nest: ' regarde le nid…', target: ' choisit sa cible…', number: ' choisit son résultat…', trade: ' prépare un troc…', tradeok: ' réfléchit à un troc…', choice: ' discute avec un personnage…' }[pr.kind] : ' joue…';
       bar.innerHTML = '<span class="msg">' + mini(cur.char, 34) + ' <b>' + esc(cur.name) + '</b>' + what + '</span>';
     } else bar.innerHTML = '<span class="msg muted">' + (S.phase === 'minigame' ? 'Mini-jeu !' : '…') + '</span>';
   }
@@ -704,9 +706,9 @@
     while ($('toasts').children.length > 3) $('toasts').firstChild.remove();
     setTimeout(() => d.remove(), 4200);
   }
-  const LAND = { blue: ['Case bleue', '#2f7cf6'], red: ['Case rouge', '#e5383b'], event: ['Case événement', '#9b4dff'], item: ['Case objet', '#06b6d4'], shop: ['Boutique', '#ec4899'], nest: ['Nid à compagnon', '#65a30d'], chance: ['Case Chance', '#f5c518'], chaos: ['Chamboulement !', '#1e293b'], tunnel: ['Passage secret', '#111827'], casino: ['Casino', '#15803d'], trade: ['Case Troc', '#0d9488'], boss: ['Case Boss !', '#7f1d1d'], shift: ['Case Terrain', '#b45309'], start: ['Départ', '#94a3b8'] };
+  const LAND = { blue: ['Case bleue', '#2f7cf6'], red: ['Case rouge', '#e5383b'], event: ['Case événement', '#9b4dff'], item: ['Case objet', '#06b6d4'], shop: ['Boutique', '#ec4899'], nest: ['Nid à compagnon', '#65a30d'], chance: ['Case Chance', '#f5c518'], chaos: ['Chamboulement !', '#1e293b'], tunnel: ['Passage secret', '#111827'], casino: ['Casino', '#15803d'], trade: ['Case Troc', '#0d9488'], boss: ['Case Boss !', '#7f1d1d'], shift: ['Case Terrain', '#b45309'], npc: ['Personnage', '#a21caf'], start: ['Départ', '#94a3b8'] };
   function landShow(m) {
-    let L = LAND[m.tile]; if (m.tile === 'tunnel') { const B = board(); L = [B.warp.name, '#111827']; } if (m.tile === 'special') { const B = board(); L = [B.special && B.special.name ? B.special.name : 'Case du boss', '#f59e0b']; }
+    let L = LAND[m.tile]; if (m.tile === 'npc') { const n = board().nodes[S.players.find((q) => q.id === m.pid).pos]; const N = n && window.PARTY.NPCS[n.npc]; if (N) L = [N.icon + ' ' + N.name.replace(/^l[ae’'] ?/i, (x) => x.toUpperCase()), '#a21caf']; } if (m.tile === 'tunnel') { const B = board(); L = [B.warp.name, '#111827']; } if (m.tile === 'special') { const B = board(); L = [B.special && B.special.name ? B.special.name : 'Case du boss', '#f59e0b']; }
     if (!L) return;
     const d = document.createElement('div'); d.className = 'landb';
     d.innerHTML = '<i style="background:' + L[1] + '"></i><span>' + esc(L[0]) + '</span>';
@@ -739,7 +741,8 @@
       shift: ['Case Terrain', 'Le terrain bouge ! Un chemin se ferme pendant 2 tours (dino endormi, marée, travaux ou éboulement)… ou, s’il y en a déjà un de fermé, il se rouvre.'],
       boss: ['Case Boss', WORLD.bosses[B.id].name + ' débarque et fait tourner sa roue : −10, −20, impôt pour tous, retour au départ, objets confisqués, parfois une étoile… ou +5 s’il est de bonne humeur.'],
     };
-    const info = n.sand ? ['Banc de sable', (I[n.t] ? I[n.t][0] + ' — ' : '') + 'On ne peut y aller qu’à marée basse (2 tours sur 4).'] : (I[n.t] || ['Case', '']);
+    const NP = n.npc && window.PARTY.NPCS[n.npc], NW = n.npc && (window.PARTY.NPC_WHEN[B.id] || {})[n.npc];
+    const info = NP ? [NP.icon + ' ' + NP.name, NP.desc + (n.npc === 'banque' && S ? ' Coffre : ' + (S.bank || 0) + ' ' + C + '.' : '') + (NW ? ' Présent seulement ' + (NW === 'nuit' ? 'la nuit.' : 'le jour.') : '')] : n.when === 'levis' ? ['Pont-levis', 'Baissé un tour sur deux (tours impairs) : on ne peut entrer au château que lorsqu’il est baissé.'] : n.when ? [n.when === 'nuit' ? 'Passage spectral' : 'Allée du jardin', 'Ce chemin n’est ouvert que ' + (n.when === 'nuit' ? 'la nuit' : 'le jour') + ' (le jour et la nuit changent tous les 4 tours).'] : n.sand ? ['Banc de sable', (I[n.t] ? I[n.t][0] + ' — ' : '') + 'On ne peut y aller qu’à marée basse (2 tours sur 4).'] : (I[n.t] || ['Case', '']);
     const star = S && (S.stars || []).find((x) => x.node === n.id);
     let extra = '';
     if (star && me) extra = '<p class="tt-star">' + starIcon() + ' Étoile ici : ' + Math.round(star.price * (S.settings.market && S.market ? S.market.star : 1)) + ' ' + C + '</p>';
@@ -1417,7 +1420,7 @@
     const items = me.items.length ? me.items.map((k) => row(ico(k, GAME.items[k].icon, 34), GAME.items[k].name, GAME.items[k].desc)).join('') : '<p class="muted">Aucun objet. La boutique 🛒 et les cases 🎁 en donnent.</p>';
     const hand = (me.hand || []).length ? me.hand.map((id) => { const c = CARDS[id]; return row(ico(FXK[c.fx], c.icon, 34), c.name + ' (' + RARITY[c.rarity].name + ')', c.desc, 'r-' + c.rarity); }).join('') : '<p class="muted">Aucune carte à jouer. Les cartes rares, épiques et légendaires des boosters arrivent ici.</p>';
     const fams = Object.entries(FAMILIES).map(([f, F]) => { const n = F.cards.filter((id) => me.cards.includes(id)).length, l = famLevel(me.cards, f); return row(F.icon, F.name + ' : ' + n + '/5', l ? 'Actif : ' + F.bonus[l - 1] : '3 cartes pour : ' + F.bonus[0], l ? 'on' : ''); }).join('');
-    const extra = [me.companion ? row(GAME.companions[me.companion].icon, GAME.companions[me.companion].name + ' (compagnon)', GAME.companions[me.companion].desc) : '', me.power ? row(GAME.powers[me.power].icon, GAME.powers[me.power].name + ' (pouvoir)', GAME.powers[me.power].desc) : '', me.shield ? row('🛡️', 'Bouclier actif', 'Annule ta prochaine perte.') : '', me.buff ? row(me.buff < 0 ? '🐌' : '👟', 'Prochain lancer ' + (me.buff > 0 ? '+' : '') + me.buff, 'S’ajoute à ton prochain dé.') : ''].join('');
+    const extra = [(me.comps || []).map((k) => row(GAME.companions[k].icon, GAME.companions[k].name + ' (compagnon)', GAME.companions[k].desc)).join(''), me.power ? row(GAME.powers[me.power].icon, GAME.powers[me.power].name + ' (pouvoir)', GAME.powers[me.power].desc) : '', me.shield ? row('🛡️', 'Bouclier actif', 'Annule ta prochaine perte.') : '', me.buff ? row(me.buff < 0 ? '🐌' : '👟', 'Prochain lancer ' + (me.buff > 0 ? '+' : '') + me.buff, 'S’ajoute à ton prochain dé.') : ''].join('');
     box.innerHTML = '<div class="help-in bag"><button class="btn small ghost hx">Fermer ✕</button><h1>🎒 Mon sac</h1><p class="muted">À ton tour, tu peux utiliser 1 objet et 1 carte avant de lancer ton dé. Tout est remis à zéro à la fin de la partie.</p>' +
       '<h2>🎲 Dés</h2><div class="bagg">' + dice + '</div><h2>🎒 Objets (' + me.items.length + '/3)</h2><div class="bagg">' + items + '</div>' +
       (S.settings.boosters ? '<h2>🃏 Cartes à jouer (' + (me.hand || []).length + '/5)</h2><div class="bagg">' + hand + '</div><h2>👪 Familles</h2><div class="bagg">' + fams + '</div>' : '') +

@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { attach } = require('./ws');
-const { THEMES, makeBoard, CHARACTERS, COLORS, WORLD, GAME, CARDS, RARITY, FAMILIES, famLevel, dayPhase } = require('./public/boards.js');
+const { THEMES, makeBoard, CHARACTERS, COLORS, WORLD, GAME, CARDS, RARITY, FAMILIES, famLevel, dayPhase, levisOpen, NPCS, NPC_WHEN } = require('./public/boards.js');
 const MINIGAMES = require('./minigames.js');
 
 const PORT = process.env.PORT || 3000;
@@ -57,7 +57,7 @@ class Room {
   }
   reset() {
     this.turn = 0; this.current = null; this.stars = []; this.traps = {}; this.prompt = null; this.mg = null;
-    this.log = []; this.lastMg = []; this.mods = {}; this.endInfo = null; this.lastChance = null; this.roundEvent = null; this.blocks = []; this.tideHigh = false; this.market = { star: 1, shop: 1, hist: [[1, 1]] };
+    this.log = []; this.lastMg = []; this.mods = {}; this.endInfo = null; this.lastChance = null; this.roundEvent = null; this.blocks = []; this.tideHigh = false; this.bank = 0; this.market = { star: 1, shop: 1, hist: [[1, 1]] };
   }
   get board() { return makeBoard(this.settings.theme, this.settings.size, this.settings.floors); }
   player(id) { return this.players.find((p) => p.id === id); }
@@ -68,12 +68,12 @@ class Room {
   publicState() {
     return {
       code: this.code, phase: this.phase, settings: this.settings, turn: this.turn,
-      current: this.current, stars: this.stars, traps: this.traps, blocks: this.blocks, tide: !!this.tideHigh, market: this.market, log: this.log.slice(-6), mods: this.mods, roundEvent: this.roundEvent, lastChance: this.lastChance,
+      current: this.current, stars: this.stars, traps: this.traps, blocks: this.blocks, tide: !!this.tideHigh, bank: this.bank, market: this.market, log: this.log.slice(-6), mods: this.mods, roundEvent: this.roundEvent, lastChance: this.lastChance,
       prompt: this.prompt ? { pid: this.prompt.pid, kind: this.prompt.kind, data: this.prompt.data, deadline: this.prompt.deadline } : null,
       mg: this.mg ? this.mg.pub : null,
       players: this.players.map((p) => ({
         id: p.id, name: p.name, char: p.char, color: p.color, coins: p.coins, stars: p.stars, pos: p.pos, host: p.host, bot: p.bot,
-        online: p.bot || !!p.client, cards: p.cards, buff: p.buff, die: p.die, dieUses: p.dieUses, team: p.team, hand: p.hand, items: p.items, companion: p.companion, power: p.power, shield: p.shield, lastColor: p.lastColor, stats: p.stats,
+        online: p.bot || !!p.client, cards: p.cards, buff: p.buff, die: p.die, dieUses: p.dieUses, team: p.team, hand: p.hand, items: p.items, comps: p.comps, companion: p.comps[0] || null, power: p.power, shield: p.shield, lastColor: p.lastColor, stats: p.stats,
       })),
     };
   }
@@ -89,7 +89,7 @@ class Room {
     const p = this.player(pid);
     return new Promise((resolve) => {
       const done = (v) => { if (!this.prompt || this.prompt.pid !== pid) return; clearTimeout(timer); this.prompt = null; this.waiters.delete(pid); this.broadcast(); resolve(v); };
-      const auto = p.bot ? rand(600, 1300) * SPEED : (p.client ? timeout : 3000);
+      const auto = p.bot ? rand(600, 1300) * SPEED : (p.client ? timeout : 3000) * SPEED;
       const timer = setTimeout(() => done(fallback()), auto);
       this.prompt = { pid, kind, data, deadline: Date.now() + auto };
       this.waiters.set(pid, (v) => { if (!valid || valid(v)) done(v); });
@@ -110,7 +110,7 @@ class Room {
     return p;
   }
   resetPlayer(p) {
-    p.coins = 10; p.stars = 0; p.pos = 0; p.items = []; p.companion = null; p.shield = false; p.lastColor = 'blue';
+    p.coins = 10; p.stars = 0; p.pos = 0; p.items = []; p.comps = []; p.shield = false; p.lastColor = 'blue';
     p.stats = { steps: 0, mgWins: 0, shopSpent: 0, itemsUsed: 0, events: 0, companions: 0, red: 0, blue: 0, earned: 0, wagered: 0, gambleWon: 0, cards: 0, boosters: 0 };
     p.cards = []; p.hand = []; p.buff = 0; p.die = null; p.dieUses = null; p.famDone = {};
   }
@@ -142,7 +142,7 @@ class Room {
   }
   canLoseStar(p) {
     if (p.stars <= 0) return false;
-    if (p.companion === 'tortulle') { this.say('🐢 Tortulle protège l’étoile de ' + p.name + ' !'); return false; }
+    if (this.hasComp(p, 'tortulle')) { this.say('🐢 Tortulle protège l’étoile de ' + p.name + ' !'); return false; }
     if (p.shield) { p.shield = false; this.say('🛡️ Le bouclier de ' + p.name + ' protège son étoile !'); return false; }
     return true;
   }
@@ -153,16 +153,21 @@ class Room {
     if (text) this.say(text);
     return true;
   }
-  adopt(p, key) {
-    p.companion = key; p.stats.companions++;
+  hasComp(p, k) { return (p.comps || []).includes(k); }
+  adopt(p, key, replace) {
+    if (p.comps.includes(key)) return;
+    if (replace && p.comps.includes(replace)) p.comps.splice(p.comps.indexOf(replace), 1, key);
+    else if (p.comps.length >= 2) p.comps.splice(0, 1, key); // le plus ancien part
+    else p.comps.push(key);
+    p.stats.companions++;
     this.emit({ t: 'fx', kind: 'item', pid: p.id, icon: GAME.companions[key].icon });
     this.say(GAME.companions[key].icon + ' ' + p.name + ' adopte ' + GAME.companions[key].name + ' : ' + GAME.companions[key].desc);
   }
   starPrice(p, s) {
     let price = Math.round(s.price * (this.settings.market ? this.market.star : 1));
     if (p.power === 'astronome') price -= 5;
-    if (p.companion === 'hibou') price -= 5;
-    if (this.settings.theme !== 'mine' && dayPhase(this.turn) === 'nuit') price -= 5; // la nuit, l'étoile est moins chère
+    if (this.hasComp(p, 'hibou')) price -= 5;
+    if (this.settings.theme !== 'mine' && dayPhase(this.turn, this.settings.theme) === 'nuit') price -= 5; // la nuit, l'étoile est moins chère
     if (this.lastChance && this.lastChance.halfStar) price = Math.ceil(price / 2);
     return Math.max(5, price);
   }
@@ -217,9 +222,11 @@ class Room {
           const high = this.turn % 4 === 3 || this.turn % 4 === 0;
           if (high !== this.tideHigh) { this.tideHigh = high; this.emit({ t: 'banner', text: high ? '🌊 Marée haute : les bancs de sable disparaissent sous l’eau !' : '🏖️ Marée basse : les bancs de sable réapparaissent' }); this.broadcast(); await sleep(1600); }
         }
-        if (this.settings.theme !== 'mine' && this.turn > 1 && dayPhase(this.turn) !== dayPhase(this.turn - 1)) {
-          const ph = dayPhase(this.turn);
-          this.emit({ t: 'banner', text: { jour: '☀️ Le jour est levé', 'crépuscule': '🌇 Le soleil se couche…', nuit: '🌙 La nuit tombe : l’étoile coûte 5 de moins !', aube: '🌅 L’aube arrive' }[ph] });
+        if (this.board.id === 'chevaliers' && this.turn > 1) { this.emit({ t: 'banner', text: levisOpen(this.turn) ? '🏰 Le pont-levis s’abaisse : on peut entrer au château !' : '⛓️ Le pont-levis se lève : le château est fermé ce tour-ci' }); await sleep(1400); }
+        if (this.settings.theme !== 'mine' && this.turn > 1 && dayPhase(this.turn, this.settings.theme) !== dayPhase(this.turn - 1, this.settings.theme)) {
+          const ph = dayPhase(this.turn, this.settings.theme);
+          if (this.settings.theme === 'hante') this.emit({ t: 'banner', text: ph === 'nuit' ? '🌙 La nuit tombe sur le manoir : les passages spectraux s’ouvrent et l’Esprit farceur se réveille !' : '☀️ Le jour se lève : l’allée du jardin rouvre et Madame Brume reçoit à nouveau' });
+          else this.emit({ t: 'banner', text: { jour: '☀️ Le jour est levé', 'crépuscule': '🌇 Le soleil se couche…', nuit: '🌙 La nuit tombe : l’étoile coûte 5 de moins !', aube: '🌅 L’aube arrive' }[ph] });
           await sleep(1500);
         }
         if (this.turn > 1 && (this.turn - 1) % (+process.env.ORDER_EVERY || 6) === 0) await this.reorder('Tour ' + this.turn + ' : nouvel ordre de passage !');
@@ -326,6 +333,10 @@ class Room {
       pirate: { kind: 'tide', icon: '🌊', text: 'La marée monte : un ponton est sous l’eau pendant 2 tours !' },
       heroes: { kind: 'works', icon: '🚧', text: 'Docteur Chaos a bloqué une rue avec des travaux pendant 2 tours !' },
       mine: { kind: 'rocks', icon: '🪨', text: 'Éboulement ! Une galerie est bouchée pendant 2 tours.' },
+      hante: { kind: 'rocks', icon: '🪦', text: 'Une tombe s’effondre sur le chemin : passage bloqué pendant 2 tours !' },
+      chevaliers: { kind: 'works', icon: '🪵', text: 'Des bûcherons ont abattu un arbre sur la route : passage bloqué pendant 2 tours !' },
+      polaire: { kind: 'rocks', icon: '🧊', text: 'Un bloc de glace tombe du glacier : passage bloqué pendant 2 tours !' },
+      egypte: { kind: 'rocks', icon: '🏜️', text: 'Une dune de sable recouvre le chemin : passage bloqué pendant 2 tours !' },
       recif: { kind: 'tide', icon: '🌊', text: 'La marée monte : un pont de corde est sous l’eau pendant 2 tours !' },
     }[B.id];
     this.blocks = [{ from: n.id, to, left: 2, kind: E.kind, icon: E.icon }];
@@ -411,7 +422,7 @@ class Room {
     this.current = p.id;
     this.broadcast();
     if (p.power === 'banquier') this.gain(p, 2);
-    if (p.companion === 'poulpi' && this.turn % 3 === 0) this.giveItem(p, pick(CHEAP_ITEMS), '🐙 Poulpi a trouvé un objet pour ' + p.name + ' !');
+    if (this.hasComp(p, 'poulpi') && this.turn % 3 === 0) this.giveItem(p, pick(CHEAP_ITEMS), '🐙 Poulpi a trouvé un objet pour ' + p.name + ' !');
     // 1) Objet éventuel, puis choix du dé
     let forced = null; // dés imposés par un objet
     let usedItem = false, usedCard = false;
@@ -453,9 +464,9 @@ class Room {
       else values = process.env.FORCE_DICE ? [+process.env.FORCE_DICE] : this.rollDie(ans.dice); // FORCE_DICE : tests
       if (!forced && ans.dice === p.die && p.dieUses) { p.dieUses--; if (p.dieUses <= 0) { const lbl = GAME.dice[p.die].label; p.die = null; p.dieUses = null; this.say('🎲 Le ' + lbl + ' de ' + p.name + ' est usé : c’était son dernier lancer.'); } }
       const bonus = [];
-      if (p.companion === 'piou') bonus.push({ icon: '🐣', n: 1 });
+      if (this.hasComp(p, 'piou')) bonus.push({ icon: '🐣', n: 1 });
       if (p.buff) { bonus.push({ icon: p.buff < 0 ? '🐌' : '🃏', n: p.buff }); p.buff = 0; }
-      if (p.companion === 'draki' && Math.random() < 0.25) bonus.push({ icon: '🐉', n: rand(1, 6) });
+      if (this.hasComp(p, 'draki') && Math.random() < 0.25) bonus.push({ icon: '🐉', n: rand(1, 6) });
       if (p.power === 'revanchard' && this.isLast(p)) bonus.push({ icon: '💢', n: rand(1, 6) });
       let total = values.reduce((a, b) => a + b, 0) + bonus.reduce((a, b) => a + b.n, 0);
       if (total < 1) { bonus.push({ icon: '🐌', n: 1 - total }); total = 1; } // on avance toujours d'au moins 1
@@ -560,12 +571,12 @@ class Room {
       let nextId = node.next[0];
       if (node.next.length > 1) {
         await flush();
-        const open = node.next.filter((id) => !this.blocks.some((b) => b.from === node.id && b.to === id) && !(this.tideHigh && B.nodes[id].sand && !node.sand));
+        const open = node.next.filter((id) => !this.blocks.some((b) => b.from === node.id && b.to === id) && !(this.tideHigh && B.nodes[id].sand && !node.sand) && !(B.nodes[id].when && !node.when && !this.whenOpen(B.nodes[id].when)));
         const ways = open.length ? open : node.next;
         if (ways.length > 1) {
           const opts = ways.map((id) => Object.assign({ value: id }, this.forkLabel(node.id, id)));
           nextId = await this.ask(p.id, 'fork', { text: 'Embranchement ! Où vas-tu ?', options: opts }, () => pick(opts).value, (v) => opts.some((o) => o.value === v));
-        } else { nextId = ways[0]; if (ways.length < node.next.length) { const b = this.blocks.find((x) => x.from === node.id); this.say((b ? b.icon + ' Le chemin est bloqué' : '🌊 Marée haute : le banc de sable est sous l’eau') + ' : ' + p.name + ' passe par l’autre côté.'); } }
+        } else { nextId = ways[0]; if (ways.length < node.next.length) { const b = this.blocks.find((x) => x.from === node.id); this.say((b ? b.icon + ' Le chemin est bloqué' : this.board.id === 'chevaliers' ? '🏰 Le pont-levis est levé' : this.board.id === 'hante' ? '🌙 Ce passage est fermé à cette heure-ci' : '🌊 Marée haute : le banc de sable est sous l’eau') + ' : ' + p.name + ' passe par l’autre côté.'); } }
       }
       p.pos = nextId; path.push(nextId); left--; p.stats.steps++;
       // Croiser des joueurs : Pickpocket / Chauvy
@@ -574,9 +585,18 @@ class Room {
         here.forEach((o) => {
           let n = 0;
           if (p.power === 'pickpocket') n += 2;
-          if (p.companion === 'chauvy') n += 1;
+          if (this.hasComp(p, 'chauvy')) n += 1;
           if (n) { const got = this.lose(o, n); if (got) this.gain(p, got, (p.power === 'pickpocket' ? '🧤 ' : '🦇 ') + p.name + ' chipe ' + this.money(got) + ' à ' + o.name + ' en passant.'); }
         });
+      }
+      // Famille Banquise : chaque case du lac gelé rapporte
+      if (B.lakes && B.lakes.some((lk) => lk.area === B.nodes[p.pos].area)) { const fp = this.fam(p, 'polaire'); if (fp) { p.coins += fp; p.stats.earned += fp; } }
+      // Banque : on dépose des pièces en passant devant
+      if (B.nodes[p.pos].npc === 'banque' && left > 0) {
+        const fl = this.fam(p, 'hante');
+        if (fl >= 2) this.gain(p, 2, '🏦 La Banque offre 2 ' + B.coin.name + ' à ' + p.name + ' (Famille Manoir).');
+        else if (fl === 1) this.say('🏦 ' + p.name + ' passe devant la Banque sans rien payer (Famille Manoir).');
+        else { const n = this.lose(p, 3); if (n) { this.bank += n; this.say('🏦 ' + p.name + ' dépose ' + this.money(n) + ' à la Banque (coffre : ' + this.bank + ').'); } }
       }
       // Étoile
       const si = this.stars.findIndex((s) => s.node === p.pos);
@@ -585,6 +605,49 @@ class Room {
       if (B.nodes[p.pos].t === 'shop') { await flush(); await this.shop(p); }
     }
     await flush();
+  }
+
+  whenOpen(w) { return w === 'levis' ? levisOpen(this.turn) : w === this.phaseNow(); }
+  phaseNow() { return dayPhase(this.turn, this.settings.theme) === 'nuit' ? 'nuit' : 'jour'; }
+  /** Visite d'un personnage non joueur. */
+  async npcVisit(p, node) {
+    const B = this.board, kind = NPCS[node.npc] ? node.npc : pick(['banque', 'esprit', 'voyante']), N = NPCS[kind], C = B.coin.name;
+    node = Object.assign({}, node, { npc: kind });
+    const when = (NPC_WHEN[B.id] || {})[node.npc];
+    if (when && when !== this.phaseNow()) { this.say('💤 ' + N.icon + ' ' + N.name + ' dort… revenez ' + (when === 'nuit' ? 'la nuit' : 'le jour') + ' !'); await sleep(1200); return; }
+    this.emit({ t: 'fx', kind: 'npc', pid: p.id, icon: N.icon });
+    if (node.npc === 'banque') {
+      const n = this.bank; this.bank = 0;
+      if (n) this.gain(p, n, '🏦 JACKPOT ! ' + p.name + ' rafle le coffre de la Banque : ' + this.money(n) + ' !'); else this.say('🏦 Le coffre de la Banque est vide…');
+      this.broadcast(); await sleep(1500); return;
+    }
+    if (node.npc === 'esprit') {
+      const withStar = this.players.filter((o) => o !== p && o.stars > 0);
+      const opts = [{ value: 'coins', label: 'Voler des ' + C, small: '10 ' + C + ' : vole 5 à 15 ' + C, disabled: p.coins < 10 }, { value: 'star', label: 'Voler une étoile', small: '35 ' + C, disabled: p.coins < 35 || !withStar.length }];
+      const fb = () => (p.bot ? (p.coins >= 35 && withStar.length && this.turn >= 3 ? 'star' : p.coins >= 20 ? 'coins' : null) : null);
+      const v = await this.ask(p.id, 'choice', { text: '👻 L’Esprit farceur : « Je vole pour toi… si tu paies ! »', options: opts }, fb, (x) => x === null || opts.some((o) => o.value === x && !o.disabled));
+      if (!v) { this.say('👻 ' + p.name + ' ne fait pas affaire avec l’Esprit.'); await sleep(800); return; }
+      if (v === 'coins') { p.coins -= 10; const t = await this.chooseTarget(p, 'Voler des ' + C + ' à qui ?', (o) => o.coins > 0); if (t) { const n = this.lose(t, rand(5, 15)); this.gain(p, n, '👻 L’Esprit vole ' + this.money(n) + ' à ' + t.name + ' pour ' + p.name + ' !'); } }
+      else { p.coins -= 35; const t = await this.chooseTarget(p, 'Voler une étoile à qui ?', (o) => o.stars > 0); if (t && this.canLoseStar(t)) { t.stars--; p.stars++; this.emit({ t: 'fx', kind: 'gotstar', pid: p.id }); this.say('👻 L’Esprit vole une étoile à ' + t.name + ' pour ' + p.name + ' !'); } }
+      this.broadcast(); await sleep(1400); return;
+    }
+    if (node.npc === 'voyante') {
+      if (p.coins < 5) { this.say('🔮 Madame Brume : « Reviens avec 5 ' + C + ', mon petit. »'); await sleep(1000); return; }
+      const yes = await this.ask(p.id, 'buy', { text: '🔮 Madame Brume lit ton avenir pour 5 ' + C + '. D’accord ?', price: 5 }, () => p.bot && Math.random() < 0.6, (x) => typeof x === 'boolean');
+      if (!yes) return;
+      p.coins -= 5;
+      const outs = [
+        { label: 'Un objet rare', run: () => this.giveItem(p, pick(['triple', 'pipe', 'boussole', 'tuyau', 'sablier']), '🔮 Madame Brume offre un objet rare à ' + p.name + ' !') },
+        { label: '+12 ' + C, run: () => this.gain(p, 12) },
+        { label: 'L’étoile vient à toi', run: () => { const B2 = this.board; let n = B2.nodes[p.pos]; for (let k = 0; k < 4; k++) n = B2.nodes[n.next[0]]; const taken = this.stars.map((s) => s.node); if (!taken.includes(n.id) && !n.fork) { this.stars[0].node = n.id; this.emit({ t: 'fx', kind: 'star', node: n.id }); } } },
+        { label: 'Élan : +3 au prochain dé', run: () => { p.buff += 3; } },
+        { label: 'Brouillard… rien', run: () => {} },
+      ];
+      const i = rand(0, outs.length - 1);
+      await this.roulette('🔮 Madame Brume', outs.map((o) => o.label), i, outs[i].label);
+      outs[i].run(); this.say('🔮 Madame Brume : ' + outs[i].label + ' pour ' + p.name + '.');
+      this.broadcast(); await sleep(1200);
+    }
   }
 
   async starStop(p, si) {
@@ -599,6 +662,7 @@ class Room {
     this.emit({ t: 'fx', kind: 'gotstar', pid: p.id, n: giant ? 2 : 1 });
     this.say(B.star.icon + ' ' + p.name + (giant ? ' trouve un Cristal géant : +2 !' : ' obtient ' + B.star.a + ' !'));
     await sleep(1800);
+    { const fc = this.fam(p, 'chevaliers'); if (fc) this.gain(p, 5 * fc, '🏰 Famille Chevaliers : ' + p.name + ' reçoit ' + this.money(5 * fc) + ' du roi.'); }
     this.placeStar(si);
     this.broadcast();
     await sleep(700);
@@ -644,12 +708,13 @@ class Room {
     p.lastColor = ['red', 'special', 'chaos'].includes(node.t) ? 'red' : 'blue';
     this.emit({ t: 'land', pid: p.id, tile: node.t });
     switch (process.env.FORCE_LAND && p.pos !== 0 ? process.env.FORCE_LAND : node.t) { // FORCE_LAND : réservé aux tests
-      case 'blue': { p.stats.blue++; const n = (3 + (p.companion === 'rouxi' ? 2 : 0)) * m + this.fam(p, 'jurassique'); this.gain(p, n, p.name + ' gagne ' + this.money(n) + '.'); break; }
+      case 'blue': { p.stats.blue++; const n = (3 + (this.hasComp(p, 'rouxi') ? 2 : 0)) * m + this.fam(p, 'jurassique'); this.gain(p, n, p.name + ' gagne ' + this.money(n) + '.'); break; }
       case 'red': { p.stats.red++; const n = Math.max(0, 3 * m - this.fam(p, 'mine')); if (n) this.lose(p, n, p.name + ' perd ' + this.money(n) + '.'); else this.say('⛏️ Le casque de ' + p.name + ' le protège : il ne perd rien !'); break; }
       case 'trade': if (this.settings.boosters) await this.trade(p); else { const n = 3 * m; this.gain(p, n, p.name + ' gagne ' + this.money(n) + '.'); } break;
       case 'start': break;
       case 'item': if (this.settings.boosters && (process.env.FORCE_CARDS || Math.random() < 0.3)) { await this.openBooster(p, 'trouvé sur une case cadeau'); break; } { const k = pick(CHEAP_ITEMS); this.giveItem(p, k, '🎁 ' + p.name + ' trouve ' + GAME.items[k].icon + ' ' + GAME.items[k].name + ' !'); await sleep(900); break; }
       case 'shop': break; // déjà proposé en passant
+      case 'npc': await this.npcVisit(p, node); break;
       case 'nest': await this.nest(p); break;
       case 'tunnel': {
         const Wp = B.warp;
@@ -677,14 +742,20 @@ class Room {
   }
 
   async nest(p) {
-    const k = pick(COMP_KEYS.filter((x) => x !== p.companion));
+    const k = pick(COMP_KEYS.filter((x) => !p.comps.includes(x)));
     const price = Math.round(5 * (p.power === 'negociateur' ? 0.7 : 1));
     const c = GAME.companions[k];
     if (p.coins < price) { this.say('🪺 Un nid ! Mais ' + p.name + ' n’a pas les ' + price + ' ' + this.board.coin.name + ' pour adopter ' + c.name + '.'); return; }
-    const yes = await this.ask(p.id, 'nest', { text: 'Un nid ! Adopter ' + c.icon + ' ' + c.name + ' pour ' + this.money(price) + ' ?', k, price, replace: p.companion }, () => true, (v) => typeof v === 'boolean');
-    if (!yes) return;
-    p.coins -= price;
-    this.adopt(p, k);
+    if (p.comps.length < 2) {
+      const yes = await this.ask(p.id, 'nest', { text: 'Un nid ! Adopter ' + c.icon + ' ' + c.name + ' pour ' + this.money(price) + ' ?', k, price }, () => true, (v) => typeof v === 'boolean');
+      if (!yes) return;
+      p.coins -= price; this.adopt(p, k);
+    } else { // déjà 2 compagnons : on peut en échanger un
+      const opts = p.comps.map((x) => ({ value: x, label: 'Échanger ' + GAME.companions[x].icon + ' ' + GAME.companions[x].name, small: 'contre ' + c.icon + ' ' + c.name + ' (' + price + ' ' + this.board.coin.name + ')' }));
+      const v = await this.ask(p.id, 'choice', { text: '🪺 Un nid avec ' + c.icon + ' ' + c.name + ' (' + c.desc + ') ! Tu as déjà 2 compagnons : en échanger un ?', options: opts }, () => (p.bot && Math.random() < 0.4 ? pick(p.comps) : null), (x) => x === null || p.comps.includes(x));
+      if (!v) { this.say('🪺 ' + p.name + ' garde ses compagnons.'); return; }
+      p.coins -= price; this.say(GAME.companions[v].icon + ' ' + GAME.companions[v].name + ' retourne dans la nature.'); this.adopt(p, k, v);
+    }
     await sleep(1000);
   }
 
@@ -700,7 +771,7 @@ class Room {
       case 'dice2': p.buff += 2; break;
       case 'dice5': p.buff += 5; break;
       case 'shield': p.shield = true; break;
-      case 'companion': this.adopt(p, pick(COMP_KEYS.filter((k) => k !== p.companion))); break;
+      case 'companion': this.adopt(p, pick(COMP_KEYS.filter((k) => !p.comps.includes(k)))); break;
       case 'steal': { const lead = this.ranking().find((o) => o !== p); if (lead) this.gain(p, this.lose(lead, 6), '🦝 Le raton voleur de ' + p.name + ' chipe des pièces à ' + lead.name + ' !'); break; }
       default: if (c.fx && c.fx.indexOf('die:') === 0) this.giveDie(p, c.fx.slice(4), '🎲 ' + p.name + ' reçoit le ' + GAME.dice[c.fx.slice(4)].label + ' !'); break;
       case 'lose5': this.lose(p, 5, '🕳️ Poche trouée ! ' + p.name + ' perd 5 pièces.'); break;
@@ -856,6 +927,10 @@ class Room {
       await sleep(700);
       p.pos = before.id;
       this.emit({ t: 'teleport', pid: p.id, to: p.pos, fly: true });
+    } else if (B.id === 'hante') {
+      const r = this.ranking(), last = r[r.length - 1];
+      const n = this.lose(p, 6);
+      if (last && last !== p) this.gain(last, n, '⚰️ Le Comte Vampirus aspire ' + this.money(n) + ' à ' + p.name + ' et les donne à ' + last.name + ' !'); else this.say('⚰️ Le Comte Vampirus aspire ' + this.money(n) + ' à ' + p.name + ' !');
     } else if (B.id === 'recif') {
       const far = B.nodes.filter((n) => n.area !== B.nodes[p.pos].area && !n.bridge && n.t !== 'tunnel');
       this.say('🌊 Raz-de-marée ! Une vague géante emporte ' + p.name + ' sur un autre îlot !');
@@ -863,6 +938,26 @@ class Room {
       p.pos = pick(far).id;
       this.emit({ t: 'teleport', pid: p.id, to: p.pos, ride: 'wave' });
       await sleep(2400);
+    } else if (B.id === 'chevaliers') {
+      const foes = this.players.filter((o) => o !== p);
+      if (foes.length) {
+        const o = pick(foes), a = rand(1, 6) + (this.hasComp(p, 'rouxi') ? 0 : 0), b = rand(1, 6);
+        this.say('⚔️ Joute ! ' + p.name + ' (' + a + ') affronte ' + o.name + ' (' + b + ')…');
+        await sleep(1400);
+        if (a === b) this.say('🛡️ Égalité : les deux chevaliers se saluent.');
+        else { const [w, l] = a > b ? [p, o] : [o, p]; const n = this.lose(l, 6); this.gain(w, n, '🏆 ' + w.name + ' remporte la joute et prend ' + this.money(n) + ' à ' + l.name + ' !'); }
+      }
+    } else if (B.id === 'polaire') {
+      let id = p.pos; for (let i = 0; i < 5; i++) { const n = B.nodes[id]; id = n.next[0]; if (B.nodes[id].t === 'tunnel') id = B.nodes[id].next[0]; }
+      this.say('🛷 Toboggan ! ' + p.name + ' glisse 5 cases plus loin sur le ventre !');
+      await sleep(600);
+      p.pos = id;
+      this.emit({ t: 'teleport', pid: p.id, to: id, ride: 'sled' });
+      await sleep(2400);
+    } else if (B.id === 'egypte') {
+      this.say('🌪️ Tempête de sable ! Tout le monde perd 3 ' + B.coin.name + ' et la Couronne s’envole ailleurs.');
+      this.players.forEach((o) => this.lose(o, 3));
+      this.moveStars();
     } else if (B.id === 'mine') {
       this.lose(p, 8, '🪨 Éboulement ! La Reine Taupe secoue la galerie : ' + p.name + ' perd 8 pépites.');
     }
@@ -999,12 +1094,12 @@ class Room {
   resolveMinigame(choice, res) {
     const rows = [];
     const pay = (p, n, win) => {
-      if (win && p.companion === 'bzz') n += 3;
+      if (win && this.hasComp(p, 'bzz')) n += 3;
       if (win && p.power === 'champion') n += 3;
-      if (!win && p.companion === 'bzz') n += 3;
+      if (!win && this.hasComp(p, 'bzz')) n += 3;
       n += this.fam(p, 'ville');
       p.coins += n; p.stats.earned += n;
-      if (win) p.stats.mgWins++;
+      if (win) { p.stats.mgWins++; const fe = this.fam(p, 'egypte'); if (fe) { n += 3 * fe; p.coins += 3 * fe; p.stats.earned += 3 * fe; } }
       return n;
     };
     const show = (pid) => (res.shows ? res.shows[pid] || '' : '');
